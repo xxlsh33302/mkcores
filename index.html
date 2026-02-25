@@ -25,10 +25,11 @@
     </nav>
 
     <div class="hint">
-      ✔ 自動儲存<br/>
-      ✔ 同月同人覆蓋更新<br/>
-      ✔ 三部門自動切換公式<br/>
-      ✔ 支援匯入/匯出、上月複製、歷史、PDF
+      ✔ 自動儲存（重新整理不消失）<br/>
+      ✔ 同月同人一筆（自動覆蓋）<br/>
+      ✔ 三部門公式自動切換<br/>
+      ✔ 匯入/匯出 JSON<br/>
+      ✔ 複製上月、跨月份歷史、輸出 PDF
     </div>
   </aside>
 
@@ -41,12 +42,14 @@
 
       <div class="periodCard">
         <div class="periodCardTitle">考績期間</div>
+
         <div class="periodRow">
           <div class="field small">
             <label>民國年</label>
             <input id="rocYear" type="number" min="1" step="1" />
             <small>例：115</small>
           </div>
+
           <div class="field small">
             <label>月份</label>
             <select id="month">
@@ -75,7 +78,7 @@
     <section id="overview" class="section">
       <div class="kpiGrid">
         <div class="kpiCard purple">
-          <div class="kpiLabel">整體平均</div>
+          <div class="kpiLabel">整體平均（總分）</div>
           <div class="kpiValue" id="kpiAvg">-</div>
           <div class="kpiNote" id="kpiCount">共 - 人</div>
         </div>
@@ -112,7 +115,7 @@
               <div class="miniValue" id="avgWork">-</div>
             </div>
             <div class="miniCard barYellow">
-              <div class="miniLabel" id="avgThirdLabel">第三項平均</div>
+              <div class="miniLabel">第三項平均</div>
               <div class="miniValue" id="avgThird">-</div>
             </div>
           </div>
@@ -247,7 +250,7 @@
         </div>
 
         <div class="muted footnote">
-          ※ 分數會自動換算成等級（S+～D），卡片不顯示分數，只顯示等級與百分比長條。
+          ※ 卡片不顯示分數：同心圓只顯示「級別」，三項只用長條百分比呈現。
         </div>
       </div>
     </section>
@@ -257,7 +260,7 @@
       <div class="sectionHeader">
         <div>
           <div class="sectionTitle">員工卡片</div>
-          <div class="muted">同心圓：外圈空心＝等級區間，實心＝區間內進度（含動畫）。卡片不顯示分數。</div>
+          <div class="muted">同心圓：外圈空心＝等級區間，實心＝區間內進度（含動畫）。</div>
         </div>
       </div>
       <div class="cardGrid" id="cardGrid"></div>
@@ -268,7 +271,7 @@
       <div class="sectionHeader">
         <div>
           <div class="sectionTitle">員工列表</div>
-          <div class="muted">只顯示當前月份資料（切月份會變）</div>
+          <div class="muted">列表保留分數（你自己管理用），卡片不顯示分數。</div>
         </div>
       </div>
 
@@ -280,8 +283,8 @@
               <th>部門</th>
               <th>等級</th>
               <th>總分</th>
-              <th>出勤分</th>
-              <th>工作分</th>
+              <th>出勤</th>
+              <th>工作</th>
               <th>第三項</th>
               <th>第三項分</th>
               <th>事假</th>
