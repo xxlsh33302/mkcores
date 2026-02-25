@@ -264,18 +264,24 @@ input:focus, select:focus{
   border:1px solid var(--border);
   box-shadow: var(--shadow);
   backdrop-filter: blur(16px);
+  animation: pop .25s ease both;
 }
+@keyframes pop{
+  from{ transform: translateY(6px); opacity: .0; }
+  to{ transform: translateY(0); opacity: 1; }
+}
+
 .empHead{ text-align:center; }
 .empName{ font-weight:950; font-size:18px; margin: 4px 0 2px; }
 .empDept{ margin:0; font-size:13px; color:var(--muted); }
 .ringWrap{ display:flex; justify-content:center; margin-top:10px; }
 
 .empMeta{
-  margin-top:10px;
-  font-size:12px;
-  line-height:1.6;
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 1.6;
   color: var(--txt);
-  text-align:center;
+  text-align: center;
 }
 
 .cardActions{
@@ -285,6 +291,40 @@ input:focus, select:focus{
   gap:10px;
   flex-wrap:wrap;
 }
+
+/* ====== 卡片：三項長條百分比（不顯示分數） ====== */
+.meterWrap{
+  margin-top: 10px;
+  display: grid;
+  gap: 10px;
+}
+.meterRow{
+  display: grid;
+  grid-template-columns: 60px 1fr;
+  gap: 10px;
+  align-items: center;
+}
+.meterLabel{
+  font-size: 12px;
+  font-weight: 900;
+  color: var(--muted);
+}
+.meterTrack{
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(17,24,39,0.10);
+  overflow: hidden;
+  position: relative;
+}
+.meterFill{
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  transition: width 0.9s ease;
+}
+.meterFill.att{ background: linear-gradient(135deg,var(--g1),var(--g2)); }
+.meterFill.work{ background: linear-gradient(135deg,#3b82f6,#6366f1); }
+.meterFill.third{ background: linear-gradient(135deg,#f59e0b,#f97316); }
 
 /* table */
 .tableCard{ padding:14px; overflow:auto; }
@@ -367,54 +407,4 @@ input:focus, select:focus{
   .kpiGrid{ flex-direction:column; }
   .analysisGrid{ grid-template-columns: 1fr; }
   .miniGrid{ grid-template-columns: 1fr; }
-}
-
-/* ====== 卡片：三項長條百分比（不顯示分數） ====== */
-.meterWrap{
-  margin-top: 10px;
-  display: grid;
-  gap: 10px;
-}
-
-.meterRow{
-  display: grid;
-  grid-template-columns: 60px 1fr;
-  gap: 10px;
-  align-items: center;
-}
-
-.meterLabel{
-  font-size: 12px;
-  font-weight: 900;
-  color: var(--muted);
-}
-
-.meterTrack{
-  height: 10px;
-  border-radius: 999px;
-  background: rgba(17,24,39,0.10);
-  overflow: hidden;
-  position: relative;
-}
-
-.meterFill{
-  height: 100%;
-  width: 0%;
-  border-radius: 999px;
-  background: linear-gradient(135deg,var(--p1),var(--p2));
-  transition: width 0.9s ease;
-}
-
-/* 讓三條 bar 顏色有區分（但仍是柔和 SaaS 風） */
-.meterFill.att{ background: linear-gradient(135deg,var(--g1),var(--g2)); }
-.meterFill.work{ background: linear-gradient(135deg,#3b82f6,#6366f1); }
-.meterFill.third{ background: linear-gradient(135deg,#f59e0b,#f97316); }
-
-/* 原本 empMeta 變成更乾淨（保留請假資訊即可） */
-.empMeta{
-  margin-top: 10px;
-  font-size: 12px;
-  line-height: 1.6;
-  color: var(--txt);
-  text-align: center;
 }
