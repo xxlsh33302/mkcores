@@ -1,8 +1,8 @@
 /* =========================
    localStorage keys
 ========================= */
-const KEY_DB = "公司考績資料庫_v3";
-const KEY_PERIOD = "公司考績期間_v3";
+const KEY_DB = "公司考績資料庫_v4";
+const KEY_PERIOD = "公司考績期間_v4";
 
 /* =========================
    DOM
@@ -19,8 +19,6 @@ const elStatus = document.getElementById("statusText");
 const blockTeacher = document.getElementById("deptBlockTeacher");
 const blockMarketing = document.getElementById("deptBlockMarketing");
 const blockPlanner = document.getElementById("deptBlockPlanner");
-
-const elThirdLabel = document.getElementById("avgThirdLabel");
 
 const elKpiAvg = document.getElementById("kpiAvg");
 const elKpiCount = document.getElementById("kpiCount");
@@ -51,6 +49,11 @@ const elHistoryBody = document.getElementById("historyBody");
 const elHistoryClose = document.getElementById("historyClose");
 
 /* =========================
+   State
+========================= */
+let editingId = null;
+
+/* =========================
    Events
 ========================= */
 document.getElementById("saveBtn").addEventListener("click", onSave);
@@ -79,11 +82,19 @@ function clamp(n, min, max){ return Math.min(Math.max(n, min), max); }
 function n0(v){ const x = parseFloat(v); return Number.isFinite(x) ? x : 0; }
 function i0(v){ const x = parseInt(v, 10); return Number.isFinite(x) ? x : 0; }
 
+function escapeHtml(s){
+  return String(s || "")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#39;");
+}
+
 function getDefaultPeriod(){
   const d = new Date();
   return { rocYear: d.getFullYear() - 1911, month: d.getMonth() + 1 };
 }
-
 function readPeriod(){
   const saved = JSON.parse(localStorage.getItem(KEY_PERIOD) || "null");
   return saved || getDefaultPeriod();
@@ -91,15 +102,12 @@ function readPeriod(){
 function writePeriod(p){
   localStorage.setItem(KEY_PERIOD, JSON.stringify(p));
 }
-
 function periodKey(rocYear, month){ return `${rocYear}-${month}`; }
 function currentPeriodKey(){
   return periodKey(i0(elRocYear.value), i0(elMonth.value));
 }
-
 function readDB(){ return JSON.parse(localStorage.getItem(KEY_DB) || "{}"); }
 function writeDB(db){ localStorage.setItem(KEY_DB, JSON.stringify(db)); }
-
 function getMonthList(key = currentPeriodKey()){
   const db = readDB();
   return db[key] || [];
@@ -109,7 +117,6 @@ function setMonthList(list, key = currentPeriodKey()){
   db[key] = list;
   writeDB(db);
 }
-
 function personKey(name, dept){
   return `${(name||"").trim()}__${dept}`.toLowerCase();
 }
@@ -120,17 +127,9 @@ function personKey(name, dept){
 function deptType(dept){
   if (dept === "學習諮商部門") return "TEACHER";
   if (dept === "行銷部門") return "MARKETING";
-  return "PLANNER"; // 課程規劃部門
+  return "PLANNER";
 }
-
 function thirdLabelForDept(dept){
-  const t = deptType(dept);
-  if (t === "TEACHER") return "諮商品質平均";
-  if (t === "MARKETING") return "行銷成效平均";
-  return "業務協助平均";
-}
-
-function thirdNameForDept(dept){
   const t = deptType(dept);
   if (t === "TEACHER") return "諮商品質";
   if (t === "MARKETING") return "行銷成效";
@@ -150,32 +149,32 @@ function fiveToHundred(score1to5){
   return clamp((score1to5 / 5) * 100, 0, 100);
 }
 
-/* =========================
-   Teacher: 出勤30 / 工作40 / 諮商品質30
-========================= */
+/* Teacher: 出勤30 / 工作40 / 諮商品質30 */
 function calcTeacherTotal(att, work, counseling){
   return clamp(att*0.3 + work*0.4 + counseling*0.3, 0, 100);
 }
 
-/* =========================
-   Marketing: 出勤30 / 工作30 / 行銷40（鼓勵超額）
-   名單：0-100%線性到75；100-150%遞減加成到85；其上固定85
-   講座加分：0/5/10/15（3場以上）
-========================= */
+/* Marketing: 出勤30 / 工作30 / 行銷40（鼓勵超額） */
 function calcMarketingPerformance(target, actual, seminarCount){
   if (target <= 0) return 0;
 
   const ratio = actual / target;
   let listScore = 0;
 
+  // 1) 先把達標做到 75 分
   if (ratio <= 1){
     listScore = ratio * 75;
-  } else if (ratio <= 1.5){
-    listScore = 75 + ((ratio - 1) * 100) * 0.1;
-  } else {
+  }
+  // 2) 超額 1.0~1.5 緩慢加成（最多到 85）
+  else if (ratio <= 1.5){
+    listScore = 75 + ((ratio - 1) / 0.5) * 10; // +0~10
+  }
+  // 3) 超過 1.5 視為滿檔（85）
+  else{
     listScore = 85;
   }
 
+  // 講座加分（鼓勵做活動）
   let bonus = 0;
   if (seminarCount === 1) bonus = 5;
   else if (seminarCount === 2) bonus = 10;
@@ -187,25 +186,27 @@ function calcMarketingTotal(att, work, perf){
   return clamp(att*0.3 + work*0.3 + perf*0.4, 0, 100);
 }
 
-/* =========================
-   Planner: 出勤30 / 工作40 / 協助30（鼓勵超額）
-   簽約：0-100%線性到70；100-150%遞減加成到80；其上固定80
-   開發名單加分：1-2 +5 / 3-4 +10 / 5+ +15
-========================= */
+/* Planner: 出勤30 / 工作40 / 協助30（鼓勵超額） */
 function calcPlannerPerformance(target, actual, leads){
   if (target <= 0) return 0;
 
   const ratio = actual / target;
   let contractScore = 0;
 
+  // 達標做到 70
   if (ratio <= 1){
     contractScore = ratio * 70;
-  } else if (ratio <= 1.5){
-    contractScore = 70 + ((ratio - 1) * 100) * 0.1;
-  } else {
+  }
+  // 超額 1.0~1.5 緩慢加成到 80
+  else if (ratio <= 1.5){
+    contractScore = 70 + ((ratio - 1) / 0.5) * 10;
+  }
+  // 超過 1.5 直接 80
+  else{
     contractScore = 80;
   }
 
+  // 額外開發名單加分（鼓勵額外開發）
   let bonus = 0;
   if (leads >= 1 && leads <= 2) bonus = 5;
   else if (leads >= 3 && leads <= 4) bonus = 10;
@@ -237,6 +238,10 @@ function ringProgress(score, info){
 /* =========================
    UI - period
 ========================= */
+function getPrevPeriod(rocYear, month){
+  if (month > 1) return { rocYear, month: month - 1 };
+  return { rocYear: rocYear - 1, month: 12 };
+}
 function updatePeriodText(){
   const y = i0(elRocYear.value);
   const m = i0(elMonth.value);
@@ -246,7 +251,6 @@ function updatePeriodText(){
   const prev = getPrevPeriod(y, m);
   elPeriodTip.textContent = `上月：民國${prev.rocYear}年${prev.month}月（可一鍵複製）`;
 }
-
 function onPeriodChange(){
   const y = clamp(i0(elRocYear.value || 1), 1, 999);
   const m = clamp(i0(elMonth.value || 1), 1, 12);
@@ -259,17 +263,14 @@ function onPeriodChange(){
 
 function updateDepartmentUI(){
   const dept = elDept.value;
-
   blockTeacher.style.display = (dept === "學習諮商部門") ? "block" : "none";
   blockMarketing.style.display = (dept === "行銷部門") ? "block" : "none";
   blockPlanner.style.display = (dept === "課程規劃部門") ? "block" : "none";
-
-  elThirdLabel.textContent = thirdLabelForDept(dept);
-  elStatus.textContent = "-";
+  elStatus.textContent = editingId ? "編輯模式：儲存會更新這筆" : "-";
 }
 
 /* =========================
-   Form read
+   Form read/write
 ========================= */
 function readForm(){
   const name = (document.getElementById("name").value || "").trim() || "未填寫";
@@ -302,6 +303,59 @@ function readForm(){
   };
 }
 
+function fillFormFromRecord(r){
+  editingId = r.id;
+
+  document.getElementById("name").value = r.name || "";
+  elDept.value = r.dept || "課程規劃部門";
+
+  document.getElementById("leavePersonal").value = r.personalLeave ?? "";
+  document.getElementById("leaveSick").value = r.sickLeave ?? "";
+  document.getElementById("leaveAnnual").value = r.annualLeave ?? "";
+  document.getElementById("leaveOfficial").value = r.officialLeave ?? "";
+
+  document.getElementById("workScore").value = r.workScore ?? "";
+
+  document.getElementById("counselingScore").value = r.counselingScore ?? "";
+
+  document.getElementById("mktTarget").value = r.mktTarget ?? "";
+  document.getElementById("mktActual").value = r.mktActual ?? "";
+  document.getElementById("mktSeminars").value = r.mktSeminars ?? "";
+
+  document.getElementById("plnTarget").value = r.plnTarget ?? "";
+  document.getElementById("plnActual").value = r.plnActual ?? "";
+  document.getElementById("plnLeads").value = r.plnLeads ?? "";
+
+  updateDepartmentUI();
+  elStatus.textContent = "編輯模式：修改後按儲存即可";
+  window.location.hash = "#form";
+}
+
+function clearForm(resetDept=true){
+  editingId = null;
+
+  document.getElementById("name").value = "";
+  document.getElementById("leavePersonal").value = "";
+  document.getElementById("leaveSick").value = "";
+  document.getElementById("leaveAnnual").value = "";
+  document.getElementById("leaveOfficial").value = "";
+  document.getElementById("workScore").value = "";
+
+  document.getElementById("counselingScore").value = "";
+  document.getElementById("mktTarget").value = "";
+  document.getElementById("mktActual").value = "";
+  document.getElementById("mktSeminars").value = "";
+  document.getElementById("plnTarget").value = "";
+  document.getElementById("plnActual").value = "";
+  document.getElementById("plnLeads").value = "";
+
+  if (resetDept){
+    elDept.value = "課程規劃部門";
+  }
+  updateDepartmentUI();
+  elStatus.textContent = "-";
+}
+
 /* =========================
    Normalize imported record
 ========================= */
@@ -312,28 +366,25 @@ function normalizeImportedRecord(raw){
   const rec = {
     name,
     dept,
+    personalLeave: n0(raw.personalLeave ?? raw.事假 ?? raw.leavePersonal),
+    sickLeave: n0(raw.sickLeave ?? raw.病假 ?? raw.leaveSick),
+    annualLeave: n0(raw.annualLeave ?? raw.特休 ?? raw.leaveAnnual),
+    officialLeave: n0(raw.officialLeave ?? raw.公假 ?? raw.leaveOfficial),
+    workScore: clamp(i0(raw.workScore ?? raw.工作表現), 0, 5),
 
-    personalLeave: n0(raw.personalLeave ?? raw.事假 ?? raw.leavePersonal ?? raw.personal_leave),
-    sickLeave: n0(raw.sickLeave ?? raw.病假 ?? raw.leaveSick ?? raw.sick_leave),
-    annualLeave: n0(raw.annualLeave ?? raw.特休 ?? raw.leaveAnnual ?? raw.annual_leave),
-    officialLeave: n0(raw.officialLeave ?? raw.公假 ?? raw.leaveOfficial ?? raw.official_leave),
+    counselingScore: clamp(i0(raw.counselingScore ?? raw.諮商品質), 0, 5),
 
-    workScore: clamp(i0(raw.workScore ?? raw.工作表現 ?? raw.work_score), 0, 5),
+    mktTarget: n0(raw.mktTarget ?? raw.名單目標),
+    mktActual: n0(raw.mktActual ?? raw.名單實際),
+    mktSeminars: clamp(i0(raw.mktSeminars ?? raw.講座場次), 0, 999),
 
-    counselingScore: clamp(i0(raw.counselingScore ?? raw.諮商品質 ?? raw.counseling_score), 0, 5),
-
-    mktTarget: n0(raw.mktTarget ?? raw.名單目標 ?? raw.target ?? raw.mkt_target),
-    mktActual: n0(raw.mktActual ?? raw.名單實際 ?? raw.actual ?? raw.mkt_actual),
-    mktSeminars: clamp(i0(raw.mktSeminars ?? raw.講座場次 ?? raw.seminarCount ?? raw.mkt_seminars), 0, 999),
-
-    plnTarget: n0(raw.plnTarget ?? raw.簽約目標 ?? raw.target ?? raw.pln_target),
-    plnActual: n0(raw.plnActual ?? raw.簽約實際 ?? raw.actual ?? raw.pln_actual),
-    plnLeads: clamp(i0(raw.plnLeads ?? raw.開發名單 ?? raw.newLeads ?? raw.pln_leads), 0, 999)
+    plnTarget: n0(raw.plnTarget ?? raw.簽約目標),
+    plnActual: n0(raw.plnActual ?? raw.簽約實際),
+    plnLeads: clamp(i0(raw.plnLeads ?? raw.開發名單), 0, 999),
   };
 
   const key = personKey(name, dept);
   const now = Date.now();
-
   return {
     id: i0(raw.id) || (now + Math.floor(Math.random()*100000)),
     _personKey: key,
@@ -350,20 +401,17 @@ function computeScores(rec){
   const work = fiveToHundred(rec.workScore);
 
   const t = deptType(rec.dept);
-  let thirdLabel = "";
+  let thirdLabel = thirdLabelForDept(rec.dept);
   let third = 0;
   let total = 0;
 
   if (t === "TEACHER"){
-    thirdLabel = "諮商品質";
     third = fiveToHundred(rec.counselingScore);
     total = calcTeacherTotal(attendance, work, third);
   } else if (t === "MARKETING"){
-    thirdLabel = "行銷成效";
     third = calcMarketingPerformance(rec.mktTarget, rec.mktActual, rec.mktSeminars);
     total = calcMarketingTotal(attendance, work, third);
   } else {
-    thirdLabel = "業務協助";
     third = calcPlannerPerformance(rec.plnTarget, rec.plnActual, rec.plnLeads);
     total = calcPlannerTotal(attendance, work, third);
   }
@@ -380,25 +428,45 @@ function computeScores(rec){
 }
 
 /* =========================
-   Save / delete / export
+   Save / delete
 ========================= */
 function onSave(){
   const rec = readForm();
   const list = getMonthList();
 
   const key = personKey(rec.name, rec.dept);
-  const idx = list.findIndex(x => x._personKey === key);
-
   const now = Date.now();
+
+  // 1) 編輯模式：用 id 更新
+  if (editingId !== null){
+    const idx = list.findIndex(x => x.id === editingId);
+    if (idx >= 0){
+      list[idx] = {
+        ...list[idx],
+        _personKey: key,
+        ...rec,
+        updatedAt: now
+      };
+      setMonthList(list);
+      elStatus.textContent = "已更新（編輯完成）";
+      clearForm(false);
+      render();
+      return;
+    }
+    // 如果找不到（極少數），就降級成「同人覆蓋」
+  }
+
+  // 2) 一般模式：同月同人覆蓋（同名＋同部門）
+  const idx2 = list.findIndex(x => x._personKey === key);
   const payload = {
-    id: (idx >= 0) ? list[idx].id : now,
+    id: (idx2 >= 0) ? list[idx2].id : now,
     _personKey: key,
     ...rec,
     updatedAt: now
   };
 
-  if (idx >= 0){
-    list[idx] = payload;
+  if (idx2 >= 0){
+    list[idx2] = payload;
     elStatus.textContent = "已更新（同月同人覆蓋）";
   } else {
     list.push(payload);
@@ -417,6 +485,9 @@ function deleteRecord(id){
   render();
 }
 
+/* =========================
+   Export / Import
+========================= */
 function exportMonthJSON(){
   const list = getMonthList();
   const y = i0(elRocYear.value);
@@ -432,46 +503,17 @@ function exportMonthJSON(){
   document.body.appendChild(a);
   a.click();
   a.remove();
-
   URL.revokeObjectURL(url);
 }
 
-function clearForm(resetDept=true){
-  document.getElementById("name").value = "";
-  document.getElementById("leavePersonal").value = "";
-  document.getElementById("leaveSick").value = "";
-  document.getElementById("leaveAnnual").value = "";
-  document.getElementById("leaveOfficial").value = "";
-  document.getElementById("workScore").value = "";
-
-  document.getElementById("counselingScore").value = "";
-  document.getElementById("mktTarget").value = "";
-  document.getElementById("mktActual").value = "";
-  document.getElementById("mktSeminars").value = "";
-  document.getElementById("plnTarget").value = "";
-  document.getElementById("plnActual").value = "";
-  document.getElementById("plnLeads").value = "";
-
-  if (resetDept){
-    elDept.value = "課程規劃部門";
-    updateDepartmentUI();
-  }
-}
-
-/* =========================
-   New Feature 1: 匯入 JSON
-   - 匯入到「當前月份」
-   - 同人同部門覆蓋
-========================= */
 async function onImportJSON(){
   const file = elImportFile.files && elImportFile.files[0];
-  elImportFile.value = ""; // reset
+  elImportFile.value = "";
   if (!file) return;
 
   try{
     const text = await file.text();
     const parsed = JSON.parse(text);
-
     if (!Array.isArray(parsed)){
       alert("匯入失敗：JSON 內容必須是陣列（多筆資料）");
       return;
@@ -481,11 +523,7 @@ async function onImportJSON(){
 
     const list = getMonthList();
     const map = new Map(list.map(r => [r._personKey, r]));
-
-    incoming.forEach(r => {
-      // 同人同部門覆蓋
-      map.set(r._personKey, r);
-    });
+    incoming.forEach(r => map.set(r._personKey, r));
 
     const merged = Array.from(map.values());
     setMonthList(merged);
@@ -499,15 +537,8 @@ async function onImportJSON(){
 }
 
 /* =========================
-   New Feature 2: 複製上月到本月
-   - 來源：上月同名同部門
-   - 目的：寫入本月（覆蓋）
+   Copy last month
 ========================= */
-function getPrevPeriod(rocYear, month){
-  if (month > 1) return { rocYear, month: month - 1 };
-  return { rocYear: rocYear - 1, month: 12 };
-}
-
 function copyLastMonthToCurrent(){
   const y = i0(elRocYear.value);
   const m = i0(elMonth.value);
@@ -543,7 +574,7 @@ function copyLastMonthToCurrent(){
 }
 
 /* =========================
-   New Feature 3: 跨月份查歷史
+   History modal
 ========================= */
 function openHistory(name, dept){
   const key = personKey(name, dept);
@@ -551,16 +582,15 @@ function openHistory(name, dept){
   const keys = Object.keys(db);
 
   const rows = [];
-
   keys.forEach(pk => {
     const list = db[pk] || [];
     const hit = list.find(r => r._personKey === key);
     if (hit){
       const s = computeScores(hit);
+      const [ry, mm] = pk.split("-").map(i0);
       rows.push({
-        periodKey: pk,
-        rocYear: i0(pk.split("-")[0]),
-        month: i0(pk.split("-")[1]),
+        rocYear: ry,
+        month: mm,
         grade: s.gradeInfo.grade,
         total: s.total,
         attendance: Math.round(s.attendance),
@@ -586,7 +616,7 @@ function openHistory(name, dept){
         <td><strong>${r.total}</strong></td>
         <td>${r.attendance}</td>
         <td>${r.work}</td>
-        <td>${r.thirdLabel}</td>
+        <td>${escapeHtml(r.thirdLabel)}</td>
         <td>${r.third}</td>
       </tr>
     `).join("");
@@ -594,15 +624,12 @@ function openHistory(name, dept){
 
   elHistoryModal.setAttribute("aria-hidden", "false");
 }
-
 function closeHistory(){
   elHistoryModal.setAttribute("aria-hidden", "true");
 }
 
 /* =========================
-   New Feature 4: 輸出 PDF（可列印版）
-   - 開新視窗，塞入可列印 HTML
-   - 呼叫 window.print()
+   Export PDF (print)
 ========================= */
 function exportPDF(){
   const list = getMonthList();
@@ -634,10 +661,7 @@ function exportPDF(){
   table{ width:100%; border-collapse:collapse; margin-top:10px; }
   th,td{ border-bottom:1px solid rgba(17,24,39,.12); text-align:left; padding:10px 8px; font-size:12px; white-space:nowrap; }
   th{ color:#6b7280; font-weight:900; }
-  @media print{
-    body{ margin: 10mm; }
-    .noPrint{ display:none; }
-  }
+  @media print{ body{ margin: 10mm; } .noPrint{ display:none; } }
 </style>
 </head>
 <body>
@@ -691,9 +715,7 @@ function exportPDF(){
     提示：請在列印視窗選擇「存成 PDF」。
   </div>
 
-<script>
-  setTimeout(()=>window.print(), 250);
-</script>
+<script>setTimeout(()=>window.print(), 250);</script>
 </body>
 </html>
   `;
@@ -706,15 +728,6 @@ function exportPDF(){
   w.document.open();
   w.document.write(html);
   w.document.close();
-}
-
-function escapeHtml(s){
-  return String(s || "")
-    .replaceAll("&","&amp;")
-    .replaceAll("<","&lt;")
-    .replaceAll(">","&gt;")
-    .replaceAll('"',"&quot;")
-    .replaceAll("'","&#39;");
 }
 
 /* =========================
@@ -748,7 +761,7 @@ function render(){
     if (s.total < 70) risk++;
 
     if (!deptAgg[r.dept]){
-      deptAgg[r.dept] = { count:0, sumTotal:0, sumAtt:0, sumWork:0, sumThird:0, max:-1 };
+      deptAgg[r.dept] = { dept:r.dept, count:0, sumTotal:0, sumAtt:0, sumWork:0, sumThird:0 };
     }
     const d = deptAgg[r.dept];
     d.count++;
@@ -756,67 +769,63 @@ function render(){
     d.sumAtt += s.attendance;
     d.sumWork += s.work;
     d.sumThird += s.third;
-    d.max = Math.max(d.max, s.total);
   });
 
-  const avgTotal = n ? Math.round((sumTotal/n) * 10) / 10 : 0;
+  const avgTotal = n ? Math.round((sumTotal/n)*10)/10 : 0;
   const avgAtt = n ? Math.round(sumAtt/n) : 0;
   const avgWork = n ? Math.round(sumWork/n) : 0;
   const avgThird = n ? Math.round(sumThird/n) : 0;
 
-  elKpiAvg.textContent = n ? String(Math.round(avgTotal)) : "-";
-  elKpiCount.textContent = `共 ${n ? n : "-"} 人`;
-  elKpiHigh.textContent = n ? String(high) : "-";
-  elKpiRisk.textContent = n ? String(risk) : "-";
+  elKpiAvg.textContent = avgTotal ? String(avgTotal) : "-";
+  elKpiCount.textContent = `共 ${n} 人`;
+  elKpiHigh.textContent = String(high);
+  elKpiRisk.textContent = String(risk);
 
-  elAnalysisAvg.textContent = n ? String(Math.round(avgTotal)) : "-";
-  elAnalysisDesc.textContent = n
-    ? `本期共 ${n} 人｜S 以上 ${high} 人｜低於 C ${risk} 人`
-    : "尚未新增員工資料";
-
+  elAnalysisAvg.textContent = avgTotal ? String(avgTotal) : "-";
+  elAnalysisDesc.textContent = n ? "分數為內部管理用，卡片不顯示分數。" : "本月尚無資料，請先新增。";
   elAvgAttendance.textContent = n ? String(avgAtt) : "-";
   elAvgWork.textContent = n ? String(avgWork) : "-";
   elAvgThird.textContent = n ? String(avgThird) : "-";
 
-  const deptKeys = Object.keys(deptAgg);
-  if (deptKeys.length === 0){
-    elDeptList.innerHTML = `<div class="muted">尚無部門資料</div>`;
-  } else {
-    deptKeys
-      .sort((a,b)=> (deptAgg[b].sumTotal/deptAgg[b].count) - (deptAgg[a].sumTotal/deptAgg[a].count))
-      .forEach(dept=>{
-        const d = deptAgg[dept];
-        const avg = Math.round(d.sumTotal/d.count);
-        const aAtt = Math.round(d.sumAtt/d.count);
-        const aWork = Math.round(d.sumWork/d.count);
-        const aThird = Math.round(d.sumThird/d.count);
+  // 部門平均
+  const deptArr = Object.values(deptAgg)
+    .map(d => ({
+      dept: d.dept,
+      count: d.count,
+      avgTotal: Math.round((d.sumTotal/d.count)*10)/10,
+      avgAtt: Math.round(d.sumAtt/d.count),
+      avgWork: Math.round(d.sumWork/d.count),
+      avgThird: Math.round(d.sumThird/d.count),
+      thirdLabel: thirdLabelForDept(d.dept)
+    }))
+    .sort((a,b)=> b.avgTotal - a.avgTotal);
 
-        const label = thirdLabelForDept(dept);
-        elDeptList.insertAdjacentHTML("beforeend", `
-          <div class="deptCard">
-            <div class="deptTop">
-              <div class="deptName">${dept}</div>
-              <div class="deptAvg">平均 ${avg}</div>
-            </div>
-            <div class="deptBottom">
-              <span>人數 ${d.count}</span>
-              <span>最高 ${Math.round(d.max)}</span>
-              <span>出勤 ${aAtt}</span>
-              <span>工作 ${aWork}</span>
-              <span>${label.replace("平均","")} ${aThird}</span>
-            </div>
-          </div>
-        `);
-      });
-  }
+  elDeptList.innerHTML = deptArr.map(d => `
+    <div class="deptCard">
+      <div class="deptTop">
+        <div class="deptName">${escapeHtml(d.dept)}</div>
+        <div class="deptAvg">${d.avgTotal}</div>
+      </div>
+      <div class="deptBottom">
+        <span>出勤 ${d.avgAtt}</span>
+        <span>工作 ${d.avgWork}</span>
+        <span>${escapeHtml(d.thirdLabel)} ${d.avgThird}</span>
+        <span>人數 ${d.count}</span>
+      </div>
+    </div>
+  `).join("");
 
-  // 卡片（同心圓）
+  // 卡片
   computed.forEach((r, idx)=>{
     const s = r._score;
     const info = s.gradeInfo;
 
     const R = 56;
     const C = 2 * Math.PI * R;
+
+    const attPct = clamp(Math.round(s.attendance), 0, 100);
+    const workPct = clamp(Math.round(s.work), 0, 100);
+    const thirdPct = clamp(Math.round(s.third), 0, 100);
 
     const card = document.createElement("div");
     card.className = "empCard";
@@ -830,7 +839,7 @@ function render(){
         <svg width="170" height="170" viewBox="0 0 160 160">
           <circle cx="80" cy="80" r="${R}" stroke="#e5e7eb" stroke-width="12" fill="none"></circle>
 
-          <circle class="ring" data-i="${idx}"
+          <circle class="ring"
             cx="80" cy="80" r="${R}"
             stroke="${info.color}"
             stroke-width="12"
@@ -838,21 +847,37 @@ function render(){
             stroke-linecap="round"
             transform="rotate(-90 80 80)"
             stroke-dasharray="${C}"
-            stroke-dashoffset="${C}">
+            stroke-dashoffset="${C}"
+            data-progress="${s.progress}">
           </circle>
 
-          <text x="50%" y="45%" text-anchor="middle" font-size="22" font-weight="950">${info.grade}</text>
-          <text x="50%" y="62%" text-anchor="middle" font-size="16">${s.total}</text>
+          <!-- 只顯示級別（不顯示分數） -->
+          <text x="50%" y="54%" text-anchor="middle" font-size="22" font-weight="950">${info.grade}</text>
         </svg>
       </div>
 
+      <div class="meterWrap">
+        <div class="meterRow">
+          <div class="meterLabel">出勤</div>
+          <div class="meterTrack"><div class="meterFill att" style="width:${attPct}%"></div></div>
+        </div>
+        <div class="meterRow">
+          <div class="meterLabel">工作</div>
+          <div class="meterTrack"><div class="meterFill work" style="width:${workPct}%"></div></div>
+        </div>
+        <div class="meterRow">
+          <div class="meterLabel">${escapeHtml(s.thirdLabel)}</div>
+          <div class="meterTrack"><div class="meterFill third" style="width:${thirdPct}%"></div></div>
+        </div>
+      </div>
+
       <div class="empMeta">
-        出勤 ${Math.round(s.attendance)}｜工作 ${Math.round(s.work)}｜${escapeHtml(s.thirdLabel)} ${Math.round(s.third)}<br/>
         事假 ${r.personalLeave}h｜病假 ${r.sickLeave}h｜特休 ${r.annualLeave}h｜公假 ${r.officialLeave}h
       </div>
 
       <div class="cardActions">
-        <button class="btn ghost" type="button" data-his="${idx}">歷史</button>
+        <button class="btn ghost" type="button" data-his="${r.id}">歷史</button>
+        <button class="btn ghost" type="button" data-edit="${r.id}">編輯</button>
         <button class="btn danger" type="button" data-del="${r.id}">刪除</button>
       </div>
     `;
@@ -863,64 +888,74 @@ function render(){
       deleteRecord(id);
     });
 
+    card.querySelector("[data-edit]").addEventListener("click", (e)=>{
+      const id = i0(e.currentTarget.getAttribute("data-edit"));
+      const hit = getMonthList().find(x => x.id === id);
+      if (hit) fillFormFromRecord(hit);
+    });
+
     card.querySelector("[data-his]").addEventListener("click", ()=>{
       openHistory(r.name, r.dept);
     });
   });
 
-  // 同心圓動畫
-  setTimeout(()=>{
-    const rings = document.querySelectorAll(".ring");
-    rings.forEach(el=>{
-      const idx = i0(el.getAttribute("data-i"));
-      const r = computed[idx];
-      if (!r) return;
+  // 列表（你自己管理用，保留分數）
+  computed.forEach(r=>{
+    const s = r._score;
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${escapeHtml(r.name)}</td>
+      <td>${escapeHtml(r.dept)}</td>
+      <td><strong>${s.gradeInfo.grade}</strong></td>
+      <td><strong>${s.total}</strong></td>
+      <td>${Math.round(s.attendance)}</td>
+      <td>${Math.round(s.work)}</td>
+      <td>${escapeHtml(s.thirdLabel)}</td>
+      <td>${Math.round(s.third)}</td>
+      <td>${r.personalLeave}</td>
+      <td>${r.sickLeave}</td>
+      <td>${r.annualLeave}</td>
+      <td>${r.officialLeave}</td>
+      <td>
+        <button class="btn ghost" type="button" data-edit="${r.id}">編輯</button>
+        <button class="btn danger" type="button" data-del="${r.id}">刪除</button>
+      </td>
+    `;
+    elTableBody.appendChild(tr);
 
-      const R = 56;
-      const C = 2 * Math.PI * R;
-      const off = C - (r._score.progress * C);
-
-      el.style.transition = "stroke-dashoffset 1.1s ease";
-      el.style.strokeDashoffset = String(off);
+    tr.querySelector("[data-del]").addEventListener("click",(e)=>{
+      const id = i0(e.currentTarget.getAttribute("data-del"));
+      deleteRecord(id);
     });
-  }, 40);
-
-  // 表格
-  if (computed.length === 0){
-    elTableBody.innerHTML = `<tr><td colspan="13" class="muted">尚未新增員工資料</td></tr>`;
-  } else {
-    computed.forEach(r=>{
-      const s = r._score;
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${escapeHtml(r.name)}</td>
-        <td>${escapeHtml(r.dept)}</td>
-        <td>${s.gradeInfo.grade}</td>
-        <td><strong>${s.total}</strong></td>
-        <td>${Math.round(s.attendance)}</td>
-        <td>${Math.round(s.work)}</td>
-        <td>${escapeHtml(s.thirdLabel)}</td>
-        <td>${Math.round(s.third)}</td>
-        <td>${r.personalLeave}</td>
-        <td>${r.sickLeave}</td>
-        <td>${r.annualLeave}</td>
-        <td>${r.officialLeave}</td>
-        <td>
-          <button class="btn ghost" type="button" data-his="1">歷史</button>
-          <button class="btn danger" type="button" data-del="1">刪除</button>
-        </td>
-      `;
-      const btnHis = tr.querySelector('[data-his="1"]');
-      const btnDel = tr.querySelector('[data-del="1"]');
-
-      btnHis.addEventListener("click", ()=> openHistory(r.name, r.dept));
-      btnDel.addEventListener("click", ()=> deleteRecord(r.id));
-
-      elTableBody.appendChild(tr);
+    tr.querySelector("[data-edit]").addEventListener("click",(e)=>{
+      const id = i0(e.currentTarget.getAttribute("data-edit"));
+      const hit = getMonthList().find(x => x.id === id);
+      if (hit) fillFormFromRecord(hit);
     });
-  }
+  });
 
-  elThirdLabel.textContent = thirdLabelForDept(elDept.value);
+  animateRings();
+}
+
+/* 同心圓動畫 */
+function animateRings(){
+  const rings = document.querySelectorAll(".ring");
+  rings.forEach(ring=>{
+    const progress = clamp(parseFloat(ring.getAttribute("data-progress") || "0"), 0, 1);
+    const dashArray = parseFloat(ring.getAttribute("stroke-dasharray") || "0");
+    const targetOffset = dashArray * (1 - progress);
+
+    // reset then animate
+    ring.style.transition = "none";
+    ring.setAttribute("stroke-dashoffset", String(dashArray));
+
+    requestAnimationFrame(()=>{
+      requestAnimationFrame(()=>{
+        ring.style.transition = "stroke-dashoffset 0.9s ease";
+        ring.setAttribute("stroke-dashoffset", String(targetOffset));
+      });
+    });
+  });
 }
 
 /* =========================
