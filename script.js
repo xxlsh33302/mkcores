@@ -59,7 +59,9 @@ let editingId = null;
 document.getElementById("saveBtn").addEventListener("click", onSave);
 document.getElementById("clearBtn").addEventListener("click", () => clearForm(true));
 
-elDept.addEventListener("change", updateDepartmentUI);
+/* ✅ 修正：用強制刷新，避免切換部門不更新 */
+elDept.addEventListener("change", forceRefreshDeptBlocks);
+
 elRocYear.addEventListener("change", onPeriodChange);
 elMonth.addEventListener("change", onPeriodChange);
 
@@ -137,6 +139,29 @@ function thirdLabelForDept(dept){
 }
 
 /* =========================
+   ✅ 強制刷新第三項區塊（修正你遇到的問題）
+========================= */
+function forceRefreshDeptBlocks(){
+  // 先全部關掉，避免殘影/停留
+  blockTeacher.style.display = "none";
+  blockMarketing.style.display = "none";
+  blockPlanner.style.display = "none";
+
+  const dept = elDept.value;
+
+  if (dept === "學習諮商部門") blockTeacher.style.display = "block";
+  else if (dept === "行銷部門") blockMarketing.style.display = "block";
+  else blockPlanner.style.display = "block";
+
+  elStatus.textContent = editingId ? "編輯模式：儲存會更新這筆" : "-";
+}
+
+/* 兼容保留（其他地方可能呼叫） */
+function updateDepartmentUI(){
+  forceRefreshDeptBlocks();
+}
+
+/* =========================
    Scoring - shared
 ========================= */
 function calcAttendance(personalLeave, sickLeave){
@@ -161,20 +186,14 @@ function calcMarketingPerformance(target, actual, seminarCount){
   const ratio = actual / target;
   let listScore = 0;
 
-  // 1) 先把達標做到 75 分
   if (ratio <= 1){
     listScore = ratio * 75;
-  }
-  // 2) 超額 1.0~1.5 緩慢加成（最多到 85）
-  else if (ratio <= 1.5){
+  } else if (ratio <= 1.5){
     listScore = 75 + ((ratio - 1) / 0.5) * 10; // +0~10
-  }
-  // 3) 超過 1.5 視為滿檔（85）
-  else{
+  } else {
     listScore = 85;
   }
 
-  // 講座加分（鼓勵做活動）
   let bonus = 0;
   if (seminarCount === 1) bonus = 5;
   else if (seminarCount === 2) bonus = 10;
@@ -193,20 +212,14 @@ function calcPlannerPerformance(target, actual, leads){
   const ratio = actual / target;
   let contractScore = 0;
 
-  // 達標做到 70
   if (ratio <= 1){
     contractScore = ratio * 70;
-  }
-  // 超額 1.0~1.5 緩慢加成到 80
-  else if (ratio <= 1.5){
+  } else if (ratio <= 1.5){
     contractScore = 70 + ((ratio - 1) / 0.5) * 10;
-  }
-  // 超過 1.5 直接 80
-  else{
+  } else {
     contractScore = 80;
   }
 
-  // 額外開發名單加分（鼓勵額外開發）
   let bonus = 0;
   if (leads >= 1 && leads <= 2) bonus = 5;
   else if (leads >= 3 && leads <= 4) bonus = 10;
@@ -261,14 +274,6 @@ function onPeriodChange(){
   render();
 }
 
-function updateDepartmentUI(){
-  const dept = elDept.value;
-  blockTeacher.style.display = (dept === "學習諮商部門") ? "block" : "none";
-  blockMarketing.style.display = (dept === "行銷部門") ? "block" : "none";
-  blockPlanner.style.display = (dept === "課程規劃部門") ? "block" : "none";
-  elStatus.textContent = editingId ? "編輯模式：儲存會更新這筆" : "-";
-}
-
 /* =========================
    Form read/write
 ========================= */
@@ -303,11 +308,14 @@ function readForm(){
   };
 }
 
+/* ✅ 修正：編輯時「先設部門」→「強制刷新第三項區塊」→ 再填值 */
 function fillFormFromRecord(r){
   editingId = r.id;
 
   document.getElementById("name").value = r.name || "";
+
   elDept.value = r.dept || "課程規劃部門";
+  forceRefreshDeptBlocks();
 
   document.getElementById("leavePersonal").value = r.personalLeave ?? "";
   document.getElementById("leaveSick").value = r.sickLeave ?? "";
@@ -326,7 +334,6 @@ function fillFormFromRecord(r){
   document.getElementById("plnActual").value = r.plnActual ?? "";
   document.getElementById("plnLeads").value = r.plnLeads ?? "";
 
-  updateDepartmentUI();
   elStatus.textContent = "編輯模式：修改後按儲存即可";
   window.location.hash = "#form";
 }
@@ -352,7 +359,8 @@ function clearForm(resetDept=true){
   if (resetDept){
     elDept.value = "課程規劃部門";
   }
-  updateDepartmentUI();
+
+  forceRefreshDeptBlocks();
   elStatus.textContent = "-";
 }
 
@@ -437,7 +445,6 @@ function onSave(){
   const key = personKey(rec.name, rec.dept);
   const now = Date.now();
 
-  // 1) 編輯模式：用 id 更新
   if (editingId !== null){
     const idx = list.findIndex(x => x.id === editingId);
     if (idx >= 0){
@@ -453,10 +460,8 @@ function onSave(){
       render();
       return;
     }
-    // 如果找不到（極少數），就降級成「同人覆蓋」
   }
 
-  // 2) 一般模式：同月同人覆蓋（同名＋同部門）
   const idx2 = list.findIndex(x => x._personKey === key);
   const payload = {
     id: (idx2 >= 0) ? list[idx2].id : now,
@@ -787,7 +792,6 @@ function render(){
   elAvgWork.textContent = n ? String(avgWork) : "-";
   elAvgThird.textContent = n ? String(avgThird) : "-";
 
-  // 部門平均
   const deptArr = Object.values(deptAgg)
     .map(d => ({
       dept: d.dept,
@@ -815,8 +819,7 @@ function render(){
     </div>
   `).join("");
 
-  // 卡片
-  computed.forEach((r, idx)=>{
+  computed.forEach((r)=>{
     const s = r._score;
     const info = s.gradeInfo;
 
@@ -851,7 +854,6 @@ function render(){
             data-progress="${s.progress}">
           </circle>
 
-          <!-- 只顯示級別（不顯示分數） -->
           <text x="50%" y="54%" text-anchor="middle" font-size="22" font-weight="950">${info.grade}</text>
         </svg>
       </div>
@@ -899,7 +901,6 @@ function render(){
     });
   });
 
-  // 列表（你自己管理用，保留分數）
   computed.forEach(r=>{
     const s = r._score;
     const tr = document.createElement("tr");
@@ -945,7 +946,6 @@ function animateRings(){
     const dashArray = parseFloat(ring.getAttribute("stroke-dasharray") || "0");
     const targetOffset = dashArray * (1 - progress);
 
-    // reset then animate
     ring.style.transition = "none";
     ring.setAttribute("stroke-dashoffset", String(dashArray));
 
@@ -966,6 +966,9 @@ function animateRings(){
   elRocYear.value = p.rocYear;
   elMonth.value = String(p.month);
   updatePeriodText();
-  updateDepartmentUI();
+
+  // ✅ 初始化時就做一次正確顯示
+  forceRefreshDeptBlocks();
+
   render();
 })();
