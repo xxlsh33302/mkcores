@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+    <meta charset="UTF-8">
+    <title>測試</title>
+    <link rel="stylesheet" href="./style.css">
+
+  </head>
+    
+  <body>
+  <!doctype html>
+<html lang="zh-TW">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>公司考績系統（內部用）</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="badge">MK</div>
+      <div class="brandText">
+        <div class="brandTitle">考績系統</div>
+        <div class="brandSub">內部管理用</div>
+      </div>
+    </div>
+
+    <nav class="nav">
+      <a class="navItem active" href="#overview">總覽</a>
+      <a class="navItem" href="#analysis">分析</a>
+      <a class="navItem" href="#form">新增/更新</a>
+      <a class="navItem" href="#cards">員工卡片</a>
+      <a class="navItem" href="#list">員工列表</a>
+    </nav>
+
+    <div class="hint">
+      ✔ 自動儲存<br/>
+      ✔ 同月同人覆蓋更新<br/>
+      ✔ 三部門自動切換公式<br/>
+      ✔ 支援匯入/匯出、上月複製、歷史、PDF
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div class="titleBlock">
+        <h1 id="pageTitle">本月總覽</h1>
+        <div class="periodText" id="periodText">考績期間：-</div>
+      </div>
+
+      <div class="periodCard">
+        <div class="periodCardTitle">考績期間</div>
+        <div class="periodRow">
+          <div class="field small">
+            <label>民國年</label>
+            <input id="rocYear" type="number" min="1" step="1" />
+            <small>例：115</small>
+          </div>
+          <div class="field small">
+            <label>月份</label>
+            <select id="month">
+              <option value="1">1月</option><option value="2">2月</option><option value="3">3月</option>
+              <option value="4">4月</option><option value="5">5月</option><option value="6">6月</option>
+              <option value="7">7月</option><option value="8">8月</option><option value="9">9月</option>
+              <option value="10">10月</option><option value="11">11月</option><option value="12">12月</option>
+            </select>
+            <small>切換會顯示該月資料</small>
+          </div>
+        </div>
+
+        <div class="periodActions">
+          <button class="btn ghost" id="importBtn" type="button">匯入 JSON</button>
+          <button class="btn ghost" id="copyLastBtn" type="button">複製上月到本月</button>
+          <button class="btn ghost" id="exportBtn" type="button">匯出本月 JSON</button>
+          <button class="btn primary" id="pdfBtn" type="button">輸出 PDF</button>
+          <input id="importFile" type="file" accept="application/json" style="display:none" />
+        </div>
+
+        <div class="periodTip muted" id="periodTip">-</div>
+      </div>
+    </header>
+
+    <!-- KPI -->
+    <section id="overview" class="section">
+      <div class="kpiGrid">
+        <div class="kpiCard purple">
+          <div class="kpiLabel">整體平均</div>
+          <div class="kpiValue" id="kpiAvg">-</div>
+          <div class="kpiNote" id="kpiCount">共 - 人</div>
+        </div>
+
+        <div class="kpiCard green">
+          <div class="kpiLabel">S 以上</div>
+          <div class="kpiValue" id="kpiHigh">-</div>
+          <div class="kpiNote">表現優秀名單</div>
+        </div>
+
+        <div class="kpiCard orange">
+          <div class="kpiLabel">低於 C</div>
+          <div class="kpiValue" id="kpiRisk">-</div>
+          <div class="kpiNote">需要關注名單</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 分析 -->
+    <section id="analysis" class="section">
+      <div class="analysisGrid">
+        <div class="bigCard">
+          <div class="cardTitle">本期概況</div>
+          <div class="bigNumber" id="analysisAvg">-</div>
+          <div class="muted" id="analysisDesc">-</div>
+
+          <div class="miniGrid">
+            <div class="miniCard barGreen">
+              <div class="miniLabel">出勤平均</div>
+              <div class="miniValue" id="avgAttendance">-</div>
+            </div>
+            <div class="miniCard barBlue">
+              <div class="miniLabel">工作表現平均</div>
+              <div class="miniValue" id="avgWork">-</div>
+            </div>
+            <div class="miniCard barYellow">
+              <div class="miniLabel" id="avgThirdLabel">第三項平均</div>
+              <div class="miniValue" id="avgThird">-</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sideCard">
+          <div class="cardTitle">部門平均</div>
+          <div class="deptList" id="deptList"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 表單 -->
+    <section id="form" class="section">
+      <div class="formCard">
+        <div class="formHeader">
+          <div>
+            <div class="formTitle">新增 / 更新（同一人同月一筆）</div>
+            <div class="muted">同名＋同部門在同一月份會自動覆蓋更新</div>
+          </div>
+          <div class="status" id="statusText">-</div>
+        </div>
+
+        <div class="row">
+          <div class="field">
+            <label>員工姓名</label>
+            <small>請填寫完整姓名（同月同名＋同部門會覆蓋）</small>
+            <input id="name" type="text" placeholder="例：王小明" />
+          </div>
+
+          <div class="field">
+            <label>部門</label>
+            <small>切換部門會自動切換欄位與計算公式</small>
+            <select id="department">
+              <option value="課程規劃部門">課程規劃部門</option>
+              <option value="行銷部門">行銷部門</option>
+              <option value="學習諮商部門">學習諮商部門（老師）</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="row">
+          <div class="field">
+            <label>事假時數</label>
+            <small>超過 8 小時才開始影響出勤分</small>
+            <input id="leavePersonal" type="number" min="0" step="0.5" placeholder="例：2" />
+          </div>
+          <div class="field">
+            <label>病假時數</label>
+            <small>超過 16 小時才開始影響出勤分</small>
+            <input id="leaveSick" type="number" min="0" step="0.5" placeholder="例：0" />
+          </div>
+          <div class="field">
+            <label>特休時數</label>
+            <small>不影響出勤分（僅留存紀錄）</small>
+            <input id="leaveAnnual" type="number" min="0" step="0.5" placeholder="例：8" />
+          </div>
+          <div class="field">
+            <label>公假時數</label>
+            <small>不影響出勤分（僅留存紀錄）</small>
+            <input id="leaveOfficial" type="number" min="0" step="0.5" placeholder="例：0" />
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="field">
+            <label>工作表現</label>
+            <small>請填寫 1～5 分（系統會換算成 0～100）</small>
+            <input id="workScore" type="number" min="1" max="5" step="1" placeholder="例：4" />
+          </div>
+        </div>
+
+        <!-- 第三項：依部門切換 -->
+        <div class="deptBlock" id="deptBlockTeacher">
+          <div class="blockTitle">學習諮商部門（老師）｜第三項：諮商品質</div>
+          <div class="row">
+            <div class="field">
+              <label>諮商品質</label>
+              <small>你主觀評估 1～5 分（1=明顯有問題、3=穩定、5=非常穩定且主動追蹤）</small>
+              <input id="counselingScore" type="number" min="1" max="5" step="1" placeholder="例：5" />
+            </div>
+          </div>
+        </div>
+
+        <div class="deptBlock" id="deptBlockMarketing">
+          <div class="blockTitle">行銷部門｜第三項：行銷成效（鼓勵超額）</div>
+          <div class="row">
+            <div class="field">
+              <label>名單目標數量</label>
+              <small>本月預計取得名單數（單位：名）</small>
+              <input id="mktTarget" type="number" min="0" step="1" placeholder="例：100" />
+            </div>
+            <div class="field">
+              <label>名單實際數量</label>
+              <small>本月實際取得名單數（單位：名）</small>
+              <input id="mktActual" type="number" min="0" step="1" placeholder="例：130" />
+            </div>
+            <div class="field">
+              <label>活動講座場次</label>
+              <small>本月實際完成的講座場次（0、1、2、3…）</small>
+              <input id="mktSeminars" type="number" min="0" step="1" placeholder="例：2" />
+            </div>
+          </div>
+        </div>
+
+        <div class="deptBlock" id="deptBlockPlanner">
+          <div class="blockTitle">課程規劃部門｜第三項：業務協助（鼓勵超額）</div>
+          <div class="row">
+            <div class="field">
+              <label>協助簽約目標</label>
+              <small>本月預計協助完成簽約/成交數（單位：件）</small>
+              <input id="plnTarget" type="number" min="0" step="1" placeholder="例：10" />
+            </div>
+            <div class="field">
+              <label>協助簽約實際</label>
+              <small>本月實際協助完成簽約/成交數（單位：件）</small>
+              <input id="plnActual" type="number" min="0" step="1" placeholder="例：12" />
+            </div>
+            <div class="field">
+              <label>額外開發名單數</label>
+              <small>本月額外開發的有效名單數（單位：名）</small>
+              <input id="plnLeads" type="number" min="0" step="1" placeholder="例：3" />
+            </div>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button class="btn primary" id="saveBtn" type="button">儲存（新增/更新）</button>
+          <button class="btn ghost" id="clearBtn" type="button">清空欄位</button>
+        </div>
+
+        <div class="muted footnote">
+          ※ 分數會自動換算成等級（S+～D），並顯示同心圓區間進度。
+        </div>
+      </div>
+    </section>
+
+    <!-- 卡片 -->
+    <section id="cards" class="section">
+      <div class="sectionHeader">
+        <div>
+          <div class="sectionTitle">員工卡片</div>
+          <div class="muted">同心圓：外圈空心＝等級區間，實心＝區間內進度（含動畫）</div>
+        </div>
+      </div>
+      <div class="cardGrid" id="cardGrid"></div>
+    </section>
+
+    <!-- 列表 -->
+    <section id="list" class="section">
+      <div class="sectionHeader">
+        <div>
+          <div class="sectionTitle">員工列表</div>
+          <div class="muted">只顯示當前月份資料（切月份會變）</div>
+        </div>
+      </div>
+
+      <div class="tableCard">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>姓名</th>
+              <th>部門</th>
+              <th>等級</th>
+              <th>總分</th>
+              <th>出勤分</th>
+              <th>工作分</th>
+              <th>第三項</th>
+              <th>第三項分</th>
+              <th>事假</th>
+              <th>病假</th>
+              <th>特休</th>
+              <th>公假</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <!-- 歷史視窗 -->
+  <div class="modal" id="historyModal" aria-hidden="true">
+    <div class="modalBackdrop" data-close="1"></div>
+    <div class="modalPanel" role="dialog" aria-modal="true">
+      <div class="modalHead">
+        <div>
+          <div class="modalTitle" id="historyTitle">歷史紀錄</div>
+          <div class="modalSub" id="historySub">-</div>
+        </div>
+        <button class="iconBtn" id="historyClose" type="button" aria-label="關閉">✕</button>
+      </div>
+
+      <div class="modalBody">
+        <div class="modalHint">顯示此員工「跨月份」的所有紀錄（由新到舊）</div>
+        <div class="historyTableWrap">
+          <table class="historyTable">
+            <thead>
+              <tr>
+                <th>考績期間</th>
+                <th>等級</th>
+                <th>總分</th>
+                <th>出勤</th>
+                <th>工作</th>
+                <th>第三項</th>
+                <th>第三項分</th>
+              </tr>
+            </thead>
+            <tbody id="historyBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="modalFoot">
+        <button class="btn ghost" type="button" data-close="1">關閉</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
+    <script  src="./script.js"></script>
+
+  </body>
+  
+</html>
