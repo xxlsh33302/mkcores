@@ -14,7 +14,12 @@
   --g2:#16a34a;
   --o1:#f97316;
   --o2:#ea580c;
+  --b1:#0ea5e9;
+  --b2:#2563eb;
+  --r1:#ef4444;
+  --r2:#dc2626;
 }
+
 
 *{ box-sizing:border-box; }
 body{
@@ -112,6 +117,11 @@ h1{ margin:0; font-size:34px; letter-spacing:0.3px; }
 
 /* KPI */
 .kpiGrid{ display:flex; gap:18px; }
+.kpiGrid.mainKpi{ flex-wrap:wrap; }
+.kpiGrid.mainKpi .kpiCard{ min-height:132px; }
+@media (max-width: 1100px){
+  .kpiGrid.mainKpi .kpiCard{ flex: 1 1 260px; }
+}
 .kpiCard{
   flex:1;
   padding:22px;
@@ -132,6 +142,8 @@ h1{ margin:0; font-size:34px; letter-spacing:0.3px; }
 .kpiCard.purple{ background: linear-gradient(135deg,var(--p1),var(--p2)); }
 .kpiCard.green{ background: linear-gradient(135deg,var(--g1),var(--g2)); }
 .kpiCard.orange{ background: linear-gradient(135deg,var(--o1),var(--o2)); }
+.kpiCard.blue{ background: linear-gradient(135deg,var(--b1),var(--b2)); }
+.kpiCard.red{ background: linear-gradient(135deg,var(--r1),var(--r2)); }
 
 .kpiLabel{ font-size:13px; opacity:.95; }
 .kpiValue{ font-size:44px; font-weight:950; margin-top:6px; letter-spacing:.5px; }
@@ -407,4 +419,47 @@ input:focus, select:focus{
   .kpiGrid{ flex-direction:column; }
   .analysisGrid{ grid-template-columns: 1fr; }
   .miniGrid{ grid-template-columns: 1fr; }
+}
+
+
+/* =========================
+   REAL RWD FIX (Mobile Layout Stack)
+========================= */
+@media (max-width: 900px){
+
+  body{
+    flex-direction: column;
+  }
+
+  .sidebar{
+    position: relative;
+    width: 100%;
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .main{
+    padding: 20px 16px 60px;
+  }
+
+  .topbar{
+    flex-direction: column;
+  }
+
+  .analysisGrid{
+    grid-template-columns: 1fr;
+  }
+
+  .kpiGrid{
+    flex-direction: column;
+  }
+
+  .cardGrid{
+    justify-content: center;
+  }
+
+  .table{
+    min-width: 900px;
+  }
 }
