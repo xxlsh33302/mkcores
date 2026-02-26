@@ -3,6 +3,8 @@
 ========================= */
 const KEY_DB = "公司考績資料庫_v4";
 const KEY_PERIOD = "公司考績期間_v4";
+const KEY_REVENUE = "公司營收設定_v1"; // 依月份保存：目標、老闆收入
+const KEY_COST = "公司費用設定_v1"; // 依月份保存：固定費用、變動成本
 
 /* =========================
    DOM
@@ -12,6 +14,27 @@ const elMonth = document.getElementById("month");
 const elPeriodText = document.getElementById("periodText");
 const elPageTitle = document.getElementById("pageTitle");
 const elPeriodTip = document.getElementById("periodTip");
+
+const elRevenueTarget = document.getElementById("revenueTarget");
+const elBossCourseRevenue = document.getElementById("bossCourseRevenue");
+const elBossTripRevenue = document.getElementById("bossTripRevenue");
+
+const elCostRent = document.getElementById("costRent");
+const elCostSystem = document.getElementById("costSystem");
+const elCostPayroll = document.getElementById("costPayroll");
+const elCostAds = document.getElementById("costAds");
+
+const elCostCourse = document.getElementById("costCourse");
+const elCostTrip = document.getElementById("costTrip");
+const elCostTeacherShare = document.getElementById("costTeacherShare");
+
+const elKpiRevenue = document.getElementById("kpiRevenue");
+const elKpiRevenueRate = document.getElementById("kpiRevenueRate");
+const elKpiProfit = document.getElementById("kpiProfit");
+const elKpiProfitRate = document.getElementById("kpiProfitRate");
+
+const elKpiCardRevenueRate = document.getElementById("kpiCardRevenueRate");
+const elKpiCardProfitRate = document.getElementById("kpiCardProfitRate");
 
 const elDept = document.getElementById("department");
 const elStatus = document.getElementById("statusText");
@@ -65,6 +88,18 @@ elDept.addEventListener("change", forceRefreshDeptBlocks);
 elRocYear.addEventListener("change", onPeriodChange);
 elMonth.addEventListener("change", onPeriodChange);
 
+// 營收設定（只影響課程規劃部門與總覽）
+[elRevenueTarget, elBossCourseRevenue, elBossTripRevenue].forEach((el)=>{
+  if (!el) return;
+  el.addEventListener("change", onRevenueSettingChange);
+});
+
+// 費用設定（公司損益）
+[elCostRent, elCostSystem, elCostPayroll, elCostAds, elCostCourse, elCostTrip, elCostTeacherShare].forEach((el)=>{
+  if (!el) return;
+  el.addEventListener("change", onCostSettingChange);
+});
+
 elExportBtn.addEventListener("click", exportMonthJSON);
 elImportBtn.addEventListener("click", () => elImportFile.click());
 elImportFile.addEventListener("change", onImportJSON);
@@ -104,6 +139,125 @@ function readPeriod(){
 function writePeriod(p){
   localStorage.setItem(KEY_PERIOD, JSON.stringify(p));
 }
+
+function readRevenueDB(){ return JSON.parse(localStorage.getItem(KEY_REVENUE) || "{}"); }
+function writeRevenueDB(db){ localStorage.setItem(KEY_REVENUE, JSON.stringify(db)); }
+function defaultRevenueSetting(){ return { target: 800000, bossCourse: 0, bossTrip: 0 }; }
+function readRevenueSetting(key = currentPeriodKey()){
+  const db = readRevenueDB();
+  return db[key] || defaultRevenueSetting();
+}
+function writeRevenueSetting(setting, key = currentPeriodKey()){
+  const db = readRevenueDB();
+  db[key] = {
+    target: n0(setting.target),
+    bossCourse: n0(setting.bossCourse),
+    bossTrip: n0(setting.bossTrip),
+  };
+  writeRevenueDB(db);
+}
+
+function readCostDB(){ return JSON.parse(localStorage.getItem(KEY_COST) || "{}"); }
+function writeCostDB(db){ localStorage.setItem(KEY_COST, JSON.stringify(db)); }
+
+function defaultCostSetting(){
+  return {
+    fixed: { rent: 0, system: 0, payroll: 0, ads: 0 },
+    variable: { course: 0, trip: 0, teacherShare: 0 }
+  };
+}
+
+function ensureCostSetting(key){
+  const db = readCostDB();
+  if (db[key]) return db[key];
+
+  // 新月份：固定費用自動帶入上月（若上月存在）
+  const [ry, mm] = key.split("-").map(i0);
+  const prev = getPrevPeriod(ry, mm);
+  const prevKey = periodKey(prev.rocYear, prev.month);
+
+  const base = defaultCostSetting();
+  const prevSetting = db[prevKey];
+  if (prevSetting && prevSetting.fixed){
+    base.fixed = {
+      rent: n0(prevSetting.fixed.rent),
+      system: n0(prevSetting.fixed.system),
+      payroll: n0(prevSetting.fixed.payroll),
+      ads: n0(prevSetting.fixed.ads),
+    };
+  }
+
+  db[key] = base;
+  writeCostDB(db);
+  return base;
+}
+
+function readCostSetting(key = currentPeriodKey()){
+  const db = readCostDB();
+  return db[key] || ensureCostSetting(key);
+}
+
+function writeCostSetting(setting, key = currentPeriodKey()){
+  const db = readCostDB();
+  db[key] = {
+    fixed: {
+      rent: n0(setting.fixed?.rent),
+      system: n0(setting.fixed?.system),
+      payroll: n0(setting.fixed?.payroll),
+      ads: n0(setting.fixed?.ads),
+    },
+    variable: {
+      course: n0(setting.variable?.course),
+      trip: n0(setting.variable?.trip),
+      teacherShare: n0(setting.variable?.teacherShare),
+    }
+  };
+  writeCostDB(db);
+}
+
+function loadCostSettingToUI(){
+  const s = readCostSetting();
+  if (elCostRent) elCostRent.value = String(s.fixed?.rent ?? 0);
+  if (elCostSystem) elCostSystem.value = String(s.fixed?.system ?? 0);
+  if (elCostPayroll) elCostPayroll.value = String(s.fixed?.payroll ?? 0);
+  if (elCostAds) elCostAds.value = String(s.fixed?.ads ?? 0);
+
+  if (elCostCourse) elCostCourse.value = String(s.variable?.course ?? 0);
+  if (elCostTrip) elCostTrip.value = String(s.variable?.trip ?? 0);
+  if (elCostTeacherShare) elCostTeacherShare.value = String(s.variable?.teacherShare ?? 0);
+}
+
+function onCostSettingChange(){
+  writeCostSetting({
+    fixed: {
+      rent: n0(elCostRent?.value),
+      system: n0(elCostSystem?.value),
+      payroll: n0(elCostPayroll?.value),
+      ads: n0(elCostAds?.value),
+    },
+    variable: {
+      course: n0(elCostCourse?.value),
+      trip: n0(elCostTrip?.value),
+      teacherShare: n0(elCostTeacherShare?.value),
+    }
+  });
+  render();
+}
+
+function loadRevenueSettingToUI(){
+  const s = readRevenueSetting();
+  if (elRevenueTarget) elRevenueTarget.value = String(s.target ?? 800000);
+  if (elBossCourseRevenue) elBossCourseRevenue.value = String(s.bossCourse ?? 0);
+  if (elBossTripRevenue) elBossTripRevenue.value = String(s.bossTrip ?? 0);
+}
+function onRevenueSettingChange(){
+  writeRevenueSetting({
+    target: n0(elRevenueTarget?.value),
+    bossCourse: n0(elBossCourseRevenue?.value),
+    bossTrip: n0(elBossTripRevenue?.value),
+  });
+  render();
+}
 function periodKey(rocYear, month){ return `${rocYear}-${month}`; }
 function currentPeriodKey(){
   return periodKey(i0(elRocYear.value), i0(elMonth.value));
@@ -133,13 +287,13 @@ function deptType(dept){
 }
 function thirdLabelForDept(dept){
   const t = deptType(dept);
-  if (t === "TEACHER") return "諮商品質";
-  if (t === "MARKETING") return "行銷成效";
-  return "業務協助";
+  if (t === "TEACHER") return "教學表現";
+  if (t === "MARKETING") return "行銷表現";
+  return "業績狀況";
 }
 
 /* =========================
-   ✅ 強制刷新第三項區塊（修正你遇到的問題）
+   ✅ 強制刷新部門專項區塊（修正你遇到的問題）
 ========================= */
 function forceRefreshDeptBlocks(){
   // 先全部關掉，避免殘影/停留
@@ -149,8 +303,8 @@ function forceRefreshDeptBlocks(){
 
   const dept = elDept.value;
 
-  if (dept === "學習諮商部門") blockTeacher.style.display = "block";
-  else if (dept === "行銷部門") blockMarketing.style.display = "block";
+  if (String(dept||"").includes("學習諮商部門")) blockTeacher.style.display = "block";
+  else if (String(dept||"").includes("行銷部門")) blockMarketing.style.display = "block";
   else blockPlanner.style.display = "block";
 
   elStatus.textContent = editingId ? "編輯模式：儲存會更新這筆" : "-";
@@ -174,7 +328,31 @@ function fiveToHundred(score1to5){
   return clamp((score1to5 / 5) * 100, 0, 100);
 }
 
-/* Teacher: 出勤30 / 工作40 / 諮商品質30 */
+function ratioOrNull(plan, actual){
+  const p = n0(plan);
+  if (p <= 0) return null; // 未填寫或 0：不納入
+  return n0(actual) / p;
+}
+function calcTeachingPerformance(planCounsel, actualCounsel, planRx, actualRx, planReport, actualReport, clubLeaveCount){
+  const ratios = [
+    ratioOrNull(planCounsel, actualCounsel),
+    ratioOrNull(planRx, actualRx),
+    ratioOrNull(planReport, actualReport),
+  ].filter(v => v !== null && Number.isFinite(v));
+
+  let base = 0;
+  if (ratios.length){
+    const avgRatio = ratios.reduce((s,v)=>s+v,0) / ratios.length;
+    base = avgRatio * 100;
+  }
+
+  const leave = i0(clubLeaveCount);
+  const penalty = leave > 1 ? (leave - 1) * 5 : 0;
+
+  return clamp(base - penalty, 0, 999999);
+}
+
+/* Teacher: 出勤30 / 工作40 / 教學表現30 */
 function calcTeacherTotal(att, work, counseling){
   return clamp(att*0.3 + work*0.4 + counseling*0.3, 0, 100);
 }
@@ -205,30 +383,17 @@ function calcMarketingTotal(att, work, perf){
   return clamp(att*0.3 + work*0.3 + perf*0.4, 0, 100);
 }
 
-/* Planner: 出勤30 / 工作40 / 協助30（鼓勵超額） */
-function calcPlannerPerformance(target, actual, leads){
+/* Planner: 出勤30 / 工作30 / 業績40（依營收加權，不封頂） */
+function calcPlannerPerformance(courseRevenue, tripRevenue, targetPerPerson){
+  const target = n0(targetPerPerson);
   if (target <= 0) return 0;
 
-  const ratio = actual / target;
-  let contractScore = 0;
-
-  if (ratio <= 1){
-    contractScore = ratio * 70;
-  } else if (ratio <= 1.5){
-    contractScore = 70 + ((ratio - 1) / 0.5) * 10;
-  } else {
-    contractScore = 80;
-  }
-
-  let bonus = 0;
-  if (leads >= 1 && leads <= 2) bonus = 5;
-  else if (leads >= 3 && leads <= 4) bonus = 10;
-  else if (leads >= 5) bonus = 15;
-
-  return clamp(contractScore + bonus, 0, 100);
+  const effective = n0(courseRevenue) * 1 + n0(tripRevenue) * 0.8;
+  const ratio = effective / target;
+  return clamp(ratio * 100, 0, 999999);
 }
 function calcPlannerTotal(att, work, perf){
-  return clamp(att*0.3 + work*0.4 + perf*0.3, 0, 100);
+  return clamp(att*0.3 + work*0.3 + perf*0.4, 0, 999999);
 }
 
 /* =========================
@@ -271,6 +436,8 @@ function onPeriodChange(){
   elMonth.value = String(m);
   writePeriod({ rocYear: y, month: m });
   updatePeriodText();
+  loadRevenueSettingToUI();
+  loadCostSettingToUI();
   render();
 }
 
@@ -288,27 +455,37 @@ function readForm(){
 
   const workScore = clamp(i0(document.getElementById("workScore").value), 0, 5);
 
-  const counselingScore = clamp(i0(document.getElementById("counselingScore").value), 0, 5);
+  const teachPlanCounsel = n0(document.getElementById("teachPlanCounsel").value);
+  const teachActualCounsel = n0(document.getElementById("teachActualCounsel").value);
+  const teachPlanRx = n0(document.getElementById("teachPlanRx").value);
+  const teachActualRx = n0(document.getElementById("teachActualRx").value);
+  const teachPlanReport = n0(document.getElementById("teachPlanReport").value);
+  const teachActualReport = n0(document.getElementById("teachActualReport").value);
+  const clubLeaveCount = clamp(i0(document.getElementById("clubLeaveCount").value), 0, 999);
 
   const mktTarget = n0(document.getElementById("mktTarget").value);
   const mktActual = n0(document.getElementById("mktActual").value);
   const mktSeminars = clamp(i0(document.getElementById("mktSeminars").value), 0, 999);
 
-  const plnTarget = n0(document.getElementById("plnTarget").value);
-  const plnActual = n0(document.getElementById("plnActual").value);
-  const plnLeads = clamp(i0(document.getElementById("plnLeads").value), 0, 999);
+  const plnCourseRevenue = n0(document.getElementById("plnCourseRevenue").value);
+  const plnTripRevenue = n0(document.getElementById("plnTripRevenue").value);
 
   return {
     name, dept,
     personalLeave, sickLeave, annualLeave, officialLeave,
     workScore,
-    counselingScore,
+
+    teachPlanCounsel, teachActualCounsel,
+    teachPlanRx, teachActualRx,
+    teachPlanReport, teachActualReport,
+    clubLeaveCount,
+
     mktTarget, mktActual, mktSeminars,
-    plnTarget, plnActual, plnLeads
+    plnCourseRevenue, plnTripRevenue
   };
 }
 
-/* ✅ 修正：編輯時「先設部門」→「強制刷新第三項區塊」→ 再填值 */
+/* ✅ 修正：編輯時「先設部門」→「強制刷新部門專項區塊」→ 再填值 */
 function fillFormFromRecord(r){
   editingId = r.id;
 
@@ -324,15 +501,20 @@ function fillFormFromRecord(r){
 
   document.getElementById("workScore").value = r.workScore ?? "";
 
-  document.getElementById("counselingScore").value = r.counselingScore ?? "";
+  document.getElementById("teachPlanCounsel").value = r.teachPlanCounsel ?? "";
+  document.getElementById("teachActualCounsel").value = r.teachActualCounsel ?? "";
+  document.getElementById("teachPlanRx").value = r.teachPlanRx ?? "";
+  document.getElementById("teachActualRx").value = r.teachActualRx ?? "";
+  document.getElementById("teachPlanReport").value = r.teachPlanReport ?? "";
+  document.getElementById("teachActualReport").value = r.teachActualReport ?? "";
+  document.getElementById("clubLeaveCount").value = r.clubLeaveCount ?? "";
 
   document.getElementById("mktTarget").value = r.mktTarget ?? "";
   document.getElementById("mktActual").value = r.mktActual ?? "";
   document.getElementById("mktSeminars").value = r.mktSeminars ?? "";
 
-  document.getElementById("plnTarget").value = r.plnTarget ?? "";
-  document.getElementById("plnActual").value = r.plnActual ?? "";
-  document.getElementById("plnLeads").value = r.plnLeads ?? "";
+  document.getElementById("plnCourseRevenue").value = r.plnCourseRevenue ?? "";
+  document.getElementById("plnTripRevenue").value = r.plnTripRevenue ?? "";
 
   elStatus.textContent = "編輯模式：修改後按儲存即可";
   window.location.hash = "#form";
@@ -348,13 +530,18 @@ function clearForm(resetDept=true){
   document.getElementById("leaveOfficial").value = "";
   document.getElementById("workScore").value = "";
 
-  document.getElementById("counselingScore").value = "";
+  document.getElementById("teachPlanCounsel").value = "";
+  document.getElementById("teachActualCounsel").value = "";
+  document.getElementById("teachPlanRx").value = "";
+  document.getElementById("teachActualRx").value = "";
+  document.getElementById("teachPlanReport").value = "";
+  document.getElementById("teachActualReport").value = "";
+  document.getElementById("clubLeaveCount").value = "";
   document.getElementById("mktTarget").value = "";
   document.getElementById("mktActual").value = "";
   document.getElementById("mktSeminars").value = "";
-  document.getElementById("plnTarget").value = "";
-  document.getElementById("plnActual").value = "";
-  document.getElementById("plnLeads").value = "";
+  document.getElementById("plnCourseRevenue").value = "";
+  document.getElementById("plnTripRevenue").value = "";
 
   if (resetDept){
     elDept.value = "課程規劃部門";
@@ -380,15 +567,21 @@ function normalizeImportedRecord(raw){
     officialLeave: n0(raw.officialLeave ?? raw.公假 ?? raw.leaveOfficial),
     workScore: clamp(i0(raw.workScore ?? raw.工作表現), 0, 5),
 
-    counselingScore: clamp(i0(raw.counselingScore ?? raw.諮商品質), 0, 5),
+    teachPlanCounsel: n0(raw.teachPlanCounsel ?? raw.預計諮商次數 ?? raw.諮商預計),
+    teachActualCounsel: n0(raw.teachActualCounsel ?? raw.實際諮商次數 ?? raw.諮商實際),
+    teachPlanRx: n0(raw.teachPlanRx ?? raw.預計處方箋 ?? raw.處方箋預計),
+    teachActualRx: n0(raw.teachActualRx ?? raw.實際處方箋 ?? raw.處方箋實際),
+    teachPlanReport: n0(raw.teachPlanReport ?? raw.預計分析書 ?? raw.分析書預計),
+    teachActualReport: n0(raw.teachActualReport ?? raw.實際分析書 ?? raw.分析書實際),
+    clubLeaveCount: clamp(i0(raw.clubLeaveCount ?? raw.聚樂部請假次數 ?? raw.聚樂部請假), 0, 999),
+
 
     mktTarget: n0(raw.mktTarget ?? raw.名單目標),
     mktActual: n0(raw.mktActual ?? raw.名單實際),
     mktSeminars: clamp(i0(raw.mktSeminars ?? raw.講座場次), 0, 999),
 
-    plnTarget: n0(raw.plnTarget ?? raw.簽約目標),
-    plnActual: n0(raw.plnActual ?? raw.簽約實際),
-    plnLeads: clamp(i0(raw.plnLeads ?? raw.開發名單), 0, 999),
+    plnCourseRevenue: n0(raw.plnCourseRevenue ?? raw.課程收入),
+    plnTripRevenue: n0(raw.plnTripRevenue ?? raw.學旅收入),
   };
 
   const key = personKey(name, dept);
@@ -404,7 +597,7 @@ function normalizeImportedRecord(raw){
 /* =========================
    Compute per record
 ========================= */
-function computeScores(rec){
+function computeScores(rec, ctx = {}){
   const attendance = calcAttendance(rec.personalLeave, rec.sickLeave);
   const work = fiveToHundred(rec.workScore);
 
@@ -414,13 +607,19 @@ function computeScores(rec){
   let total = 0;
 
   if (t === "TEACHER"){
-    third = fiveToHundred(rec.counselingScore);
+    third = calcTeachingPerformance(
+      rec.teachPlanCounsel, rec.teachActualCounsel,
+      rec.teachPlanRx, rec.teachActualRx,
+      rec.teachPlanReport, rec.teachActualReport,
+      rec.clubLeaveCount
+    );
     total = calcTeacherTotal(attendance, work, third);
   } else if (t === "MARKETING"){
     third = calcMarketingPerformance(rec.mktTarget, rec.mktActual, rec.mktSeminars);
     total = calcMarketingTotal(attendance, work, third);
   } else {
-    third = calcPlannerPerformance(rec.plnTarget, rec.plnActual, rec.plnLeads);
+    const targetPerPerson = n0(ctx.plannerTargetPerPerson);
+    third = calcPlannerPerformance(rec.plnCourseRevenue, rec.plnTripRevenue, targetPerPerson);
     total = calcPlannerTotal(attendance, work, third);
   }
 
@@ -591,7 +790,11 @@ function openHistory(name, dept){
     const list = db[pk] || [];
     const hit = list.find(r => r._personKey === key);
     if (hit){
-      const s = computeScores(hit);
+      const monthList = list;
+      const plannerCount = monthList.filter(r => deptType(r.dept) === "PLANNER").length;
+      const rev = readRevenueSetting(pk);
+      const targetPer = plannerCount ? (n0(rev.target) / (plannerCount + 1)) : 0;
+      const s = computeScores(hit, { plannerTargetPerPerson: targetPer });
       const [ry, mm] = pk.split("-").map(i0);
       rows.push({
         rocYear: ry,
@@ -638,11 +841,15 @@ function closeHistory(){
 ========================= */
 function exportPDF(){
   const list = getMonthList();
+  const rev = readRevenueSetting();
+  const plannerCount = list.filter(r => deptType(r.dept) === "PLANNER").length;
+  const plannerTargetPerPerson = plannerCount ? (n0(rev.target) / (plannerCount + 1)) : 0;
+  const ctx = { plannerTargetPerPerson };
   const y = i0(elRocYear.value);
   const m = i0(elMonth.value);
 
   const computed = list
-    .map(r => ({ ...r, _score: computeScores(r) }))
+    .map(r => ({ ...r, _score: computeScores(r, ctx) }))
     .sort((a,b) => b._score.total - a._score.total);
 
   const n = computed.length;
@@ -688,8 +895,8 @@ function exportPDF(){
         <th>總分</th>
         <th>出勤</th>
         <th>工作</th>
-        <th>第三項</th>
-        <th>第三項分</th>
+        <th>部門專項</th>
+        <th>部門專項分</th>
         <th>事假</th>
         <th>病假</th>
         <th>特休</th>
@@ -740,12 +947,57 @@ function exportPDF(){
 ========================= */
 function render(){
   const list = getMonthList();
+
+  // 依本月資料計算課程規劃師個人目標（固定包含老闆 1 人）
+  const rev = readRevenueSetting();
+  const plannerCount = list.filter(r => deptType(r.dept) === "PLANNER").length;
+  const plannerTargetPerPerson = plannerCount ? (n0(rev.target) / (plannerCount + 1)) : 0;
+  const ctx = { plannerTargetPerPerson };
+
+  // 總營業額（給總覽用）：規劃師（原始）＋老闆（原始）
+  const totalCourse = list.filter(r=>deptType(r.dept)==="PLANNER").reduce((s,r)=>s+n0(r.plnCourseRevenue),0) + n0(rev.bossCourse);
+  const totalTrip = list.filter(r=>deptType(r.dept)==="PLANNER").reduce((s,r)=>s+n0(r.plnTripRevenue),0) + n0(rev.bossTrip);
+  const totalRevenue = totalCourse + totalTrip;
+  const reached = n0(rev.target) > 0 ? (totalRevenue >= n0(rev.target)) : false;
+
+  // 公司費用（本月損益）
+  const cost = readCostSetting();
+  const fixedTotal = n0(cost.fixed?.rent) + n0(cost.fixed?.system) + n0(cost.fixed?.payroll) + n0(cost.fixed?.ads);
+  const variableTotal = n0(cost.variable?.course) + n0(cost.variable?.trip) + n0(cost.variable?.teacherShare);
+  const totalCost = fixedTotal + variableTotal;
+
+  const profit = totalRevenue - totalCost;
+  const revenueRate = n0(rev.target) > 0 ? (totalRevenue / n0(rev.target)) * 100 : 0;
+  const profitRate = totalRevenue > 0 ? (profit / totalRevenue) * 100 : 0;
+
+  // 主 KPI 顯示
+  if (elKpiRevenue) elKpiRevenue.textContent = Math.round(totalRevenue).toLocaleString();
+  if (elKpiRevenueRate) elKpiRevenueRate.textContent = Math.round(revenueRate) + "%";
+  if (elKpiProfit) elKpiProfit.textContent = Math.round(profit).toLocaleString();
+  if (elKpiProfitRate) elKpiProfitRate.textContent = Math.round(profitRate) + "%";
+
+  // 動態顏色：達標率
+  if (elKpiCardRevenueRate){
+    elKpiCardRevenueRate.classList.remove("green","orange","red","purple");
+    if (revenueRate >= 100) elKpiCardRevenueRate.classList.add("green");
+    else if (revenueRate >= 80) elKpiCardRevenueRate.classList.add("orange");
+    else elKpiCardRevenueRate.classList.add("red");
+  }
+
+  // 動態顏色：淨利率
+  if (elKpiCardProfitRate){
+    elKpiCardProfitRate.classList.remove("green","orange","red");
+    if (profitRate > 20) elKpiCardProfitRate.classList.add("green");
+    else if (profitRate >= 0) elKpiCardProfitRate.classList.add("orange");
+    else elKpiCardProfitRate.classList.add("red");
+  }
+
   elDeptList.innerHTML = "";
   elCardGrid.innerHTML = "";
   elTableBody.innerHTML = "";
 
   const computed = list
-    .map(r => ({ ...r, _score: computeScores(r) }))
+    .map(r => ({ ...r, _score: computeScores(r, ctx) }))
     .sort((a,b) => b._score.total - a._score.total);
 
   const n = computed.length;
@@ -787,7 +1039,12 @@ function render(){
   elKpiRisk.textContent = String(risk);
 
   elAnalysisAvg.textContent = avgTotal ? String(avgTotal) : "-";
-  elAnalysisDesc.textContent = n ? "分數為內部管理用，卡片不顯示分數。" : "本月尚無資料，請先新增。";
+  if (!n){
+    elAnalysisDesc.textContent = "本月尚無資料，請先新增。";
+  } else {
+    const revText = n0(rev.target) ? `｜總營業額 ${Math.round(totalRevenue)} / 目標 ${Math.round(n0(rev.target))}${reached ? "（達標）" : "（未達標）"}` : "";
+    elAnalysisDesc.textContent = `分數為內部管理用，卡片不顯示分數。${revText}`;
+  }
   elAvgAttendance.textContent = n ? String(avgAtt) : "-";
   elAvgWork.textContent = n ? String(avgWork) : "-";
   elAvgThird.textContent = n ? String(avgThird) : "-";
@@ -966,6 +1223,8 @@ function animateRings(){
   elRocYear.value = p.rocYear;
   elMonth.value = String(p.month);
   updatePeriodText();
+  loadRevenueSettingToUI();
+  loadCostSettingToUI();
 
   // ✅ 初始化時就做一次正確顯示
   forceRefreshDeptBlocks();
