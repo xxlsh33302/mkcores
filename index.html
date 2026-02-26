@@ -62,7 +62,87 @@
           </div>
         </div>
 
-        <div class="periodActions">
+        <div class="divider"></div>
+
+        <div class="periodRow">
+          <div class="field">
+            <label>本月營業額目標</label>
+            <input id="revenueTarget" type="number" min="0" step="1000" />
+            <small>預設 800,000，可手動調整</small>
+          </div>
+        </div>
+
+        <div class="periodRow">
+          <div class="field">
+            <label>老闆｜課程收入</label>
+            <input id="bossCourseRevenue" type="number" min="0" step="1000" placeholder="例：200000" />
+            <small>只計入總營業額，不顯示卡片</small>
+          </div>
+          <div class="field">
+            <label>老闆｜學旅收入</label>
+            <input id="bossTripRevenue" type="number" min="0" step="1000" placeholder="例：100000" />
+            <small>只計入總營業額，不顯示卡片</small>
+          </div>
+        </div>
+
+        
+        <div class="divider"></div>
+
+        <div class="periodRow">
+          <div class="field">
+            <label>公司費用（固定費用｜會自動複製上月）</label>
+            <small>固定費用會在切換到新月份時自動帶入上月數字，你可以再調整。</small>
+          </div>
+        </div>
+
+        <div class="periodRow">
+          <div class="field">
+            <label>租金</label>
+            <input id="costRent" type="number" min="0" step="1000" placeholder="例：60000" />
+          </div>
+          <div class="field">
+            <label>系統費</label>
+            <input id="costSystem" type="number" min="0" step="1000" placeholder="例：20000" />
+          </div>
+        </div>
+
+        <div class="periodRow">
+          <div class="field">
+            <label>人事基本成本</label>
+            <input id="costPayroll" type="number" min="0" step="1000" placeholder="例：300000" />
+          </div>
+          <div class="field">
+            <label>廣告預算</label>
+            <input id="costAds" type="number" min="0" step="1000" placeholder="例：50000" />
+          </div>
+        </div>
+
+        <div class="periodRow">
+          <div class="field">
+            <label>公司費用（變動成本｜每月手動輸入）</label>
+            <small>這三項不會自動帶入上月，避免把舊數字誤用到新月份。</small>
+          </div>
+        </div>
+
+        <div class="periodRow">
+          <div class="field">
+            <label>課程成本</label>
+            <input id="costCourse" type="number" min="0" step="1000" placeholder="例：280000" />
+          </div>
+          <div class="field">
+            <label>學旅成本</label>
+            <input id="costTrip" type="number" min="0" step="1000" placeholder="例：150000" />
+          </div>
+        </div>
+
+        <div class="periodRow">
+          <div class="field">
+            <label>講師分潤</label>
+            <input id="costTeacherShare" type="number" min="0" step="1000" placeholder="例：90000" />
+          </div>
+        </div>
+
+<div class="periodActions">
           <button class="btn ghost" id="importBtn" type="button">匯入 JSON</button>
           <button class="btn ghost" id="copyLastBtn" type="button">複製上月到本月</button>
           <button class="btn ghost" id="exportBtn" type="button">匯出本月 JSON</button>
@@ -76,6 +156,35 @@
 
     <!-- KPI -->
     <section id="overview" class="section">
+      <!-- 公司主 KPI（營運儀表板） -->
+      <div class="kpiGrid mainKpi">
+        <div class="kpiCard green" id="kpiCardRevenue">
+          <div class="kpiLabel">本月營業額</div>
+          <div class="kpiValue" id="kpiRevenue">-</div>
+          <div class="kpiNote">包含老闆收入</div>
+        </div>
+
+        <div class="kpiCard purple" id="kpiCardRevenueRate">
+          <div class="kpiLabel">達標率</div>
+          <div class="kpiValue" id="kpiRevenueRate">-</div>
+          <div class="kpiNote">依本月營業額目標</div>
+        </div>
+
+        <div class="kpiCard blue" id="kpiCardProfit">
+          <div class="kpiLabel">本月淨利</div>
+          <div class="kpiValue" id="kpiProfit">-</div>
+          <div class="kpiNote">營業額－總成本</div>
+        </div>
+
+        <div class="kpiCard orange" id="kpiCardProfitRate">
+          <div class="kpiLabel">淨利率</div>
+          <div class="kpiValue" id="kpiProfitRate">-</div>
+          <div class="kpiNote">淨利 ÷ 營業額</div>
+        </div>
+      </div>
+
+      <div class="divider" style="margin:18px 0;"></div>
+
       <div class="kpiGrid">
         <div class="kpiCard purple">
           <div class="kpiLabel">整體平均（總分）</div>
@@ -115,7 +224,7 @@
               <div class="miniValue" id="avgWork">-</div>
             </div>
             <div class="miniCard barYellow">
-              <div class="miniLabel">第三項平均</div>
+              <div class="miniLabel">部門專項平均</div>
               <div class="miniValue" id="avgThird">-</div>
             </div>
           </div>
@@ -190,20 +299,59 @@
           </div>
         </div>
 
-        <!-- 第三項：依部門切換 -->
+        <!-- 部門專項：依部門切換 -->
         <div class="deptBlock" id="deptBlockTeacher">
-          <div class="blockTitle">學習諮商部門（老師）｜第三項：諮商品質</div>
+          <div class="blockTitle">學習諮商部門（老師）｜部門專項：教學表現</div>
+
           <div class="row">
             <div class="field">
-              <label>諮商品質</label>
-              <small>你主觀評估 1～5 分（1=明顯有問題、3=穩定、5=非常穩定且主動追蹤）</small>
-              <input id="counselingScore" type="number" min="1" max="5" step="1" placeholder="例：5" />
+              <label>諮商次數｜預計</label>
+              <small>可留空或填 0（未填寫不納入計算）</small>
+              <input id="teachPlanCounsel" type="number" min="0" step="1" placeholder="例：12" />
+            </div>
+            <div class="field">
+              <label>諮商次數｜實際</label>
+              <small>可留空或填 0</small>
+              <input id="teachActualCounsel" type="number" min="0" step="1" placeholder="例：10" />
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="field">
+              <label>處方箋｜預計</label>
+              <small>可留空或填 0（未填寫不納入計算）</small>
+              <input id="teachPlanRx" type="number" min="0" step="1" placeholder="例：8" />
+            </div>
+            <div class="field">
+              <label>處方箋｜實際</label>
+              <small>可留空或填 0</small>
+              <input id="teachActualRx" type="number" min="0" step="1" placeholder="例：8" />
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="field">
+              <label>分析書｜預計</label>
+              <small>可留空或填 0（未填寫不納入計算）</small>
+              <input id="teachPlanReport" type="number" min="0" step="1" placeholder="例：4" />
+            </div>
+            <div class="field">
+              <label>分析書｜實際</label>
+              <small>可留空或填 0</small>
+              <input id="teachActualReport" type="number" min="0" step="1" placeholder="例：4" />
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="field">
+              <label>聚樂部請假次數</label>
+              <small>每月可請假 1 次；超過 1 次，每多 1 次扣 5 分</small>
+              <input id="clubLeaveCount" type="number" min="0" step="1" placeholder="例：1" />
             </div>
           </div>
         </div>
-
         <div class="deptBlock" id="deptBlockMarketing">
-          <div class="blockTitle">行銷部門｜第三項：行銷成效（鼓勵超額）</div>
+          <div class="blockTitle">行銷部門｜部門專項：行銷表現（鼓勵超額）</div>
           <div class="row">
             <div class="field">
               <label>名單目標數量</label>
@@ -224,25 +372,26 @@
         </div>
 
         <div class="deptBlock" id="deptBlockPlanner">
-          <div class="blockTitle">課程規劃部門｜第三項：業務協助（鼓勵超額）</div>
+          <div class="blockTitle">課程規劃部門｜部門專項：業績狀況（依營收加權）</div>
           <div class="row">
             <div class="field">
-              <label>協助簽約目標</label>
-              <small>本月預計協助完成簽約/成交數（單位：件）</small>
-              <input id="plnTarget" type="number" min="0" step="1" placeholder="例：10" />
+              <label>課程收入</label>
+              <small>分數權重：×1</small>
+              <input id="plnCourseRevenue" type="number" min="0" step="1000" placeholder="例：250000" />
             </div>
             <div class="field">
-              <label>協助簽約實際</label>
-              <small>本月實際協助完成簽約/成交數（單位：件）</small>
-              <input id="plnActual" type="number" min="0" step="1" placeholder="例：12" />
-            </div>
-            <div class="field">
-              <label>額外開發名單數</label>
-              <small>本月額外開發的有效名單數（單位：名）</small>
-              <input id="plnLeads" type="number" min="0" step="1" placeholder="例：3" />
+              <label>學旅收入</label>
+              <small>分數權重：×0.8</small>
+              <input id="plnTripRevenue" type="number" min="0" step="1000" placeholder="例：100000" />
             </div>
           </div>
+
+          <div class="muted" style="margin-top:8px;">
+            ※ 個人目標＝本月營業額目標 ÷（規劃師人數＋老闆 1 人）。卡片不顯示數字，列表與報表保留計算結果。
+          </div>
         </div>
+
+        <div class="actions"></div>
 
         <div class="actions">
           <button class="btn primary" id="saveBtn" type="button">儲存（新增/更新）</button>
@@ -285,8 +434,8 @@
               <th>總分</th>
               <th>出勤</th>
               <th>工作</th>
-              <th>第三項</th>
-              <th>第三項分</th>
+              <th>部門專項</th>
+              <th>部門專項分</th>
               <th>事假</th>
               <th>病假</th>
               <th>特休</th>
@@ -323,8 +472,8 @@
                 <th>總分</th>
                 <th>出勤</th>
                 <th>工作</th>
-                <th>第三項</th>
-                <th>第三項分</th>
+                <th>部門專項</th>
+                <th>部門專項分</th>
               </tr>
             </thead>
             <tbody id="historyBody"></tbody>
