@@ -39,6 +39,9 @@ const elKpiCardProfitRate = document.getElementById("kpiCardProfitRate");
 const elDept = document.getElementById("department");
 const elStatus = document.getElementById("statusText");
 
+const elCleanCount = document.getElementById("cleanCount");
+const elCleanRequiredText = document.getElementById("cleanRequiredText");
+
 const blockTeacher = document.getElementById("deptBlockTeacher");
 const blockMarketing = document.getElementById("deptBlockMarketing");
 const blockPlanner = document.getElementById("deptBlockPlanner");
@@ -420,6 +423,26 @@ function getPrevPeriod(rocYear, month){
   if (month > 1) return { rocYear, month: month - 1 };
   return { rocYear: rocYear - 1, month: 12 };
 }
+
+function countFridaysInMonth(rocYear, month){
+  const y = i0(rocYear) + 1911;
+  const m = clamp(i0(month), 1, 12);
+  const days = new Date(y, m, 0).getDate(); // last day of month
+  let c = 0;
+  for (let d=1; d<=days; d++){
+    const wd = new Date(y, m-1, d).getDay(); // 0 Sun ... 5 Fri
+    if (wd === 5) c++;
+  }
+  return c;
+}
+function updateCleanRequiredUI(){
+  if (!elCleanRequiredText) return;
+  const y = i0(elRocYear.value);
+  const m = i0(elMonth.value);
+  const need = countFridaysInMonth(y, m);
+  elCleanRequiredText.textContent = String(need);
+}
+
 function updatePeriodText(){
   const y = i0(elRocYear.value);
   const m = i0(elMonth.value);
@@ -438,6 +461,7 @@ function onPeriodChange(){
   updatePeriodText();
   loadRevenueSettingToUI();
   loadCostSettingToUI();
+  updateCleanRequiredUI();
   render();
 }
 
@@ -454,6 +478,7 @@ function readForm(){
   const officialLeave = n0(document.getElementById("leaveOfficial").value);
 
   const workScore = clamp(i0(document.getElementById("workScore").value), 0, 5);
+  const cleanCount = clamp(i0(elCleanCount?.value), 0, 999);
 
   const teachPlanCounsel = n0(document.getElementById("teachPlanCounsel").value);
   const teachActualCounsel = n0(document.getElementById("teachActualCounsel").value);
@@ -474,6 +499,7 @@ function readForm(){
     name, dept,
     personalLeave, sickLeave, annualLeave, officialLeave,
     workScore,
+    cleanCount,
 
     teachPlanCounsel, teachActualCounsel,
     teachPlanRx, teachActualRx,
@@ -500,6 +526,7 @@ function fillFormFromRecord(r){
   document.getElementById("leaveOfficial").value = r.officialLeave ?? "";
 
   document.getElementById("workScore").value = r.workScore ?? "";
+  if (elCleanCount) elCleanCount.value = r.cleanCount ?? "";
 
   document.getElementById("teachPlanCounsel").value = r.teachPlanCounsel ?? "";
   document.getElementById("teachActualCounsel").value = r.teachActualCounsel ?? "";
@@ -529,6 +556,7 @@ function clearForm(resetDept=true){
   document.getElementById("leaveAnnual").value = "";
   document.getElementById("leaveOfficial").value = "";
   document.getElementById("workScore").value = "";
+  if (elCleanCount) elCleanCount.value = "";
 
   document.getElementById("teachPlanCounsel").value = "";
   document.getElementById("teachActualCounsel").value = "";
@@ -566,6 +594,7 @@ function normalizeImportedRecord(raw){
     annualLeave: n0(raw.annualLeave ?? raw.特休 ?? raw.leaveAnnual),
     officialLeave: n0(raw.officialLeave ?? raw.公假 ?? raw.leaveOfficial),
     workScore: clamp(i0(raw.workScore ?? raw.工作表現), 0, 5),
+    cleanCount: clamp(i0(raw.cleanCount ?? raw.clean ?? raw.整潔 ?? raw.整潔次數), 0, 999),
 
     teachPlanCounsel: n0(raw.teachPlanCounsel ?? raw.預計諮商次數 ?? raw.諮商預計),
     teachActualCounsel: n0(raw.teachActualCounsel ?? raw.實際諮商次數 ?? raw.諮商實際),
@@ -1086,6 +1115,9 @@ function render(){
     const attPct = clamp(Math.round(s.attendance), 0, 100);
     const workPct = clamp(Math.round(s.work), 0, 100);
     const thirdPct = clamp(Math.round(s.third), 0, 100);
+const cleanNeed = countFridaysInMonth(i0(elRocYear.value), i0(elMonth.value));
+    const cleanDone = clamp(i0(r.cleanCount ?? 0), 0, 999);
+    const cleanPct = cleanNeed > 0 ? clamp(Math.round((cleanDone / cleanNeed) * 100), 0, 100) : 0;
 
     const card = document.createElement("div");
     card.className = "empCard";
@@ -1128,10 +1160,14 @@ function render(){
           <div class="meterLabel">${escapeHtml(s.thirdLabel)}</div>
           <div class="meterTrack"><div class="meterFill third" style="width:${thirdPct}%"></div></div>
         </div>
+        <div class="meterRow">
+          <div class="meterLabel">整潔</div>
+          <div class="meterTrack"><div class="meterFill clean" style="width:${cleanPct}%"></div></div>
+        </div>
       </div>
 
       <div class="empMeta">
-        事假 ${r.personalLeave}h｜病假 ${r.sickLeave}h｜特休 ${r.annualLeave}h｜公假 ${r.officialLeave}h
+        事假 ${r.personalLeave}h｜病假 ${r.sickLeave}h｜特休 ${r.annualLeave}h｜公假 ${r.officialLeave}h<br/>整潔 ${cleanDone} / ${cleanNeed}
       </div>
 
       <div class="cardActions">
@@ -1174,6 +1210,7 @@ function render(){
       <td>${r.sickLeave}</td>
       <td>${r.annualLeave}</td>
       <td>${r.officialLeave}</td>
+      <td>${r.cleanCount ?? 0}</td>
       <td>
         <button class="btn ghost" type="button" data-edit="${r.id}">編輯</button>
         <button class="btn danger" type="button" data-del="${r.id}">刪除</button>
